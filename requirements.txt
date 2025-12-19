@@ -1,0 +1,26 @@
+# Core orchestration & LLM
+langgraph==0.2.50
+langchain-core==0.3.28
+langchain-google-genai==2.0.5
+google-generativeai==0.8.3
+
+# Data sources
+edgartools==2.28.0
+yfinance==0.2.50
+tavily-python==0.5.0
+
+# Data validation & schemas
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# UI
+streamlit==1.41.1
+
+# Utilities
+python-dotenv==1.0.1
+pandas==2.2.3
+requests==2.32.3
+python-dateutil==2.9.0
+
+# Development
+pytest==8.3.4
