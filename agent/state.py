@@ -6,6 +6,17 @@ This flows through: Planner -> Executor -> Validator -> Reporter
 from typing import TypedDict, List, Dict, Any, Optional
 from datetime import datetime
 
+'''
+TypedDict is a typing construct that lets you define the expected shape of a 
+dictionary, tells which keys exist and what types their valus should have witout
+turning it into a class/changing runtime
+
+TypedDict - Type hints help catch bugs
+ToolResult has metadata - Every piece of data has provenance
+execution_log - Makes debugging easy
+confidence - We track data quality from the start
+'''
+
 class ToolCall(TypedDict):
     #A planned tool call
     tool_name: str
