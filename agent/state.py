@@ -49,3 +49,20 @@ class AgentState(TypedDict):
     #Telemetry
     start_time: str
     total_latency_ms: Optional[float]
+
+def create_initial_state(query: str) -> AgentState:
+    #Create fresh state for a new query
+    return AgentState(
+        query=query,
+        plan=[],
+        plan_reasoning="",
+        tool_results=[],
+        execution_log=[],
+        overall_confidence=0.0,
+        needs_retry=False,
+        retry_count=0,
+        answer="",
+        audit_trail={},
+        start_time=datetime.utcnow().isoformat(),
+        total_latency_ms=None
+    )
