@@ -280,5 +280,57 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "execution_log": execution_log
         }
     
+#Step 4 - Fallback plan (Safety net)
+def _create_fallback_plan(query: str) -> list:
+    '''
+    Creates a simple fallback plan if Gemini fails.
+
+    This is a safety net. If the LLM crashes or returns garbage, 
+    we still want to try something rather than completely failing.
+
+    Strategy:
+    - use simple keyword matching
+    - look for ticker symbols (uppercase 1-5 letters)
+    - look for financial keywords (revenue, income, etc)
+    - default to a simple SEC query
+
+    Args:
+        query: the users question
+    Returns:
+        A basic plan (list of tool calls)
+    '''
+
+    query_lower = query.lower()
+    words = query.split()
+    plan = []
+
+    #Look for ticker symbols (all caps, 1-5 letters)
+    #Example - "What was AAPL revenue?" -> finds "AAPL"
+    potential_tickers = [
+        word.upper() for word in words
+        if word.isupper() and 1 <= len(word) <= 5
+    ]
+    
+    #if we found a ticker and financial keywords, query SEC
+    if potential_tickers and any(
+        keyword in query_lower
+        for keyword in ["revenue", "income", "profit", "earnings", "financial"]
+    ):
+        ticker = potential_tickers[0]
+        plan.append({
+            "tool_name": "get_quarterly_financials",
+            "parameters": {"ticker": ticker},
+            "reason": f"Fallback: Extract financials for {ticker}"
+        })
+    #if no plan yet, default to Apple (just so we return something)
+    if not plan:
+        plan.append({
+            "tool_name": "get_quarterly_financials",
+            "parameters": {"ticker": "AAPL"},
+            "reason": "Fallback: Default query (couldn't parse user intent)"
+        })
+    
+    return plan
+    
 
 
