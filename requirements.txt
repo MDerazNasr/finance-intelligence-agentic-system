@@ -5,6 +5,9 @@ langchain-google-genai==2.0.5
 google-generativeai==0.8.3
 
 # Data sources
+# Note: edgar requires Python 3.10+ (uses str | None syntax)
+# If using Python 3.9, you'll need to upgrade Python or use edgartools instead
+edgar>=5.0.0
 edgartools==2.28.0
 yfinance==0.2.50
 tavily-python==0.5.0

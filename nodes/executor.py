@@ -157,7 +157,7 @@ def executor_node(state: Dict[str, Any]) -> Dict[str, Any]:
 #tool routing function
 def _route_to_tool(
         tool_name: str,
-        paramters: Dict[str, Any],
+        parameters: Dict[str, Any],
         execution_log: List[str]
 ) -> ToolResult:
     '''
@@ -185,8 +185,8 @@ def _route_to_tool(
     '''
 
     #Tool 1 - SEC ANALYZER (XBRL Fiancial Data)
-    if tool_name == "get_quarterly_financals":
-        ticker = paramters.get("ticker", "")
+    if tool_name == "get_quarterly_financials":
+        ticker = parameters.get("ticker", "")
 
         if not ticker:
             #Missing required parameter
@@ -201,7 +201,7 @@ def _route_to_tool(
                 error="Missing required parameter: ticker"
             )
         # Call the actual tool
-        return get_latest_quarterly_financials
+        return get_latest_quarterly_financials(ticker)
     
     #Tool 2 - Competitor Finder (Phase 2)
     elif tool_name == "find_competitors":
