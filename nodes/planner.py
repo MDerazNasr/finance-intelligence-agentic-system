@@ -168,5 +168,117 @@ Output:
 Remember: Output ONLY the JSON, nothing else!
 """
 
+#step 3 - The main planner function
+def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
+    '''
+    The Planner Node - Creates a step by step plan for answering the query
+
+    How it works:
+        1. takes the user's query from state
+        2. sends it to LLM with instructions
+        3. Gemini returns a JSON plan
+        4. We parse the plan and update the state
+
+    Args:
+        state: the current agent state (which contains the users query)
+
+    Returns:
+        Updated state with:
+        - plan: List of tool calls to execute
+        - plan_reasoning: Why this plan was chosen
+        - execution_log: Human-readable lof of what happened
+
+    Example flow:
+        Input state: {"query": "What was Apple's revenue?", ...}
+        Output: {"plan": [{"tool_name": "sec_analyzer", ...}], ...}
+    '''
+
+    #extract query
+    query = state["query"]
+
+    #get execution log/ create empty list if first time
+    execution_log = state.get("execution_log", [])
+    execution_log.append(f"Planner: Analyzing query: '{query}'")
+
+    #Call gemini to create the plan
+    try:
+        #get the LLLM
+        llm = get_llm()
+
+        # Create the messages for Gemini
+        # SystemMessage = instructions (the PLANNER_SYSTEM_PROMPT)
+        # HumanMessage = the actual user query
+        messages = [
+            SystemMessage(content=PLANNER_SYSTEM_PROMPT),
+            HumanMessage(content=f"User Query: {query}\n\nCreate a plan:")
+        ]
+
+        execution_log.append("Sending query to Gemini for planning....")
+        #Invoke LLM to make API call
+        response = llm.invoke(messages)
+        #extract text from response
+        response_text = response.content.strip()
+
+        #Parse the JSON
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            # Extract JSON from between ``` and ```
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+        
+        #Parse the JSON
+        plan_data = json.loads(response_text)
+        #extract the plan steps and reasoning
+        plan = plan_data.get("steps", [])
+        reasoning = plan_data.get("reasoning", "No reasoning provided")
+
+        execution_log.append(f"Plan Created: {len(plan)} step(s)")
+        execution_log.append(f"Reasoning: {reasoning}")
+
+        #Log each step
+        for i, step in enumerate(plan, 1):
+            tool_name = step.get("tool_name", "unknown")
+            params = step.get("parameters", {})
+            reason = step.get("reason", "")
+            execution_log.append(
+                f"Step {i}: {tool_name}({params}) - {reason}"
+            )
+        #Reason the updated state
+        return {
+            "plan": plan, #The list of tool calls
+            "plan_reasoning": reasoning, #Why this plan
+            "execution_log": execution_log #Updated log
+        }
+    
+    except json.JSONDecodeError as e:
+        #JSON parsing failed - Gemini didn't return valid JSON
+        execution_log.append(f"Failed to parse plan: Invalid JSON from LLM")
+        execution_log.append(f"Error: {str(e)}")
+        execution_log.append(f"Response was: {response_text[:200]}")
+
+        #Create a fallback plan
+        fallback_plan = _create_fallback_plan(query)
+        execution_log.append(f"Using fallback plan: {len(fallback_plan)} step(s)")
+
+        return {
+            "plan": fallback_plan,
+            "plan_reasoning": f"Fallback plan (LLM returned invalid JSON): {str(e)}",
+            "execution_log": execution_log
+        }
+    
+    except Exception as e:
+        # Some other error occurred 
+        execution_log.append(f"Planning failed with error: {str(e)}")
+
+        #Create a fallback plan
+        fallback_plan = _create_fallback_plan(query)
+        execution_log.append(f"Using fallback plan: {len(fallback_plan)} step(s)")
+
+        return {
+            "plan": fallback_plan,
+            "plan_reasoning": f"Fallback plan due to error: {str(e)}",
+            "execution_log": execution_log
+        }
+    
 
 
