@@ -97,6 +97,24 @@ AVAILABLE TOOLS:
    Example: research_ai_disruption("finance")
    When to use: User asks about AI impact, disruption, use cases
 
+5. general_financial_research(query: str)
+   Purpose: Fallback for any financial question not covered by the 4 core tools
+   Returns: Answer synthesized from web search + LLM reasoning
+   Example: general_financial_research("What is Apple's P/E ratio?")
+   When to use: User asks about metrics/data not in the 4 core tools
+   NOTE: Returns lower confidence (0.7) than XBRL data (1.0)
+
+DECISION TREE:
+1. If asking about 10-Q/10-K financials → use get_quarterly_financials
+2. If asking about competitors → use find_competitors  
+3. If asking about top N companies → use get_top_companies
+4. If asking about AI disruption → use research_ai_disruption
+5. If asking ANYTHING ELSE financial → use general_financial_research
+
+This ensures the agent can always provide an answer, even for queries
+outside the 4 core use cases. The confidence scoring makes it clear
+when we're using primary sources (XBRL) vs derived data (web search).
+
 YOUR TASK:
     1. Read the user's question
     2. Figure out which tools to call and in what order
