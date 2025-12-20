@@ -38,8 +38,12 @@ def get_latest_quarterly_financials(ticker: str) -> ToolResult:
         #Get company
         company = Company(ticker.upper())
         #get latest 10-Q
+        filings = company.get_filings(form="10-Q").latest(1)
+        if not filings:
+            return _error_result(ticker, "No 10-Q filings found")
+        
         filing = filings[0]
-        xbrl = filing.xbrl()
+        xbrl = filings.xbrl()
 
         if not xbrl:
             return _error_result(ticker, "XBRL not available")

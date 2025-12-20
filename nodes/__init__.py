@@ -14,6 +14,7 @@ Nodes in this package:
 '''
 
 from nodes.planner import planner_node
+from nodes.executor import executor_node
 
 __all__ = ["planner_node"]
 
