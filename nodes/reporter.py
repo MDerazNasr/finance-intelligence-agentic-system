@@ -169,4 +169,111 @@ def reporter_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "execution_log": execution_log
     }
 
-    }
+def _format_successful_result(result: Dict[str, Any]) -> str:
+    '''
+    Formats a successful tool result for display.
+
+    This function knows how to format each type of tool's output
+    It's like having different templates for different types of articles
+
+    Args:
+        result:  A ToolResult that succeeded
+    Returns:
+        Formatted string for display
+    
+    Example:
+            Input: {"tool_name": "sec_analyzer", "data": {"revenue": 94930000000}}
+            Output: "**Revenue:** $94.93B" 
+    '''
+
+    tool_name = result["tool_name"]
+    data = result["data"]
+
+    #Start with the confidence indicator
+    confidence = result["confidence"]
+    confidence_emoji = _get_confidence_emoji(confidence)
+
+    output = []
+    output.append(f"\n**Confidence:** {confidence:.0%} {confidence_emoji}")
+    output.append(f"**Source:** {result['source']}")
+
+    #Format based on tool type
+    if tool_name == "get_quarterly_financials" and data:
+        #Format SEC financial data
+        output.append(f"\n**Company:** {data.get('company_name', 'Unknown')}")
+        output.append(f"**Filing Date:** {data.get('filing_date', 'Unknown')}")
+        output.append(f"**Period End:** {data.get('period_end', 'Unknown')}")
+    
+        #Format the financial metrics
+        output.append(f"\n**Financial Metrics:**")
+        financials = data.get("financials", {})
+
+        if financials:
+            for key, value in financials.items():
+                label = value.get("label", key)
+                amount = value.get("value", 0)
+                #Format large numbers with commas and B/M suffixes
+                formatted_amount = _format_currency(amount)
+                output.append(f"- **{label}:** {formatted_amount}")
+        else:
+            output.append("- No financial metrics available")
+        
+        # Add filing URL
+        filing_url = data.get("filing_url", "")
+        if filing_url:
+            output.append(f"\n[View SEC Filing]({filing_url})")
+
+    elif tool_name == "find_competitors" and data:
+        # Format competitor data (Phase 2)
+        competitors = data.get("competitors", [])
+        output.append(f"\n**Competitors Found:** {len(competitors)}")
+        
+        for comp in competitors[:5]:  # Show top 5
+            ticker = comp.get("ticker", "")
+            name = comp.get("name", "")
+            output.append(f"- **{ticker}:** {name}")
+    
+    elif tool_name == "get_top_companies" and data:
+        # Format top companies data (Phase 2)
+        companies = data.get("companies", [])
+        output.append(f"\n**Top {len(companies)} Companies:**")
+        
+        for i, comp in enumerate(companies, 1):
+            ticker = comp.get("ticker", "")
+            name = comp.get("name", "")
+            market_cap = comp.get("market_cap", 0)
+            formatted_cap = _format_currency(market_cap)
+            output.append(f"{i}. **{ticker}** - {name} (Market Cap: {formatted_cap})")
+    
+    elif tool_name == "research_ai_disruption" and data:
+        # Format AI disruption research (Phase 2)
+        summary = data.get("summary", "")
+        use_cases = data.get("use_cases", [])
+        
+        output.append(f"\n**AI Disruption Analysis:**")
+        output.append(summary)
+        
+        if use_cases:
+            output.append(f"\n**Key Use Cases:**")
+            for uc in use_cases[:5]:
+                output.append(f"- {uc}")
+    
+    elif tool_name == "general_financial_research" and data:
+        # Format general research (Phase 2)
+        answer = data.get("answer", "")
+        sources = data.get("sources", [])
+        
+        output.append(f"\n{answer}")
+        
+        if sources:
+            output.append(f"\n**Sources:**")
+            for src in sources[:3]:
+                title = src.get("title", "")
+                url = src.get("url", "")
+                output.append(f"- [{title}]({url})")
+    
+    else:
+        # Generic fallback for unknown tool types
+        output.append(f"\n**Data:** {data}")
+    
+    return "\n".join(output)
