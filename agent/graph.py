@@ -14,6 +14,15 @@ Why LangGraph?
 - Allows complex routing (we'll add validation loops in Phase 3)
 - Industry standard for production agentic systems
 '''
+import sys
+from pathlib import Path
+
+THIS_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = THIS_DIR.parent
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import os
 from dotenv import load_dotenv
 from typing import Literal
@@ -206,9 +215,9 @@ if __name__ == "__main__":
     load_dotenv()
     
     # Check for API key
-    if not os.getenv("ANTHROPIC_API_KEY"):  # Or GOOGLE_API_KEY if using Gemini
-        print("ERROR: ANTHROPIC_API_KEY not found in .env")
-        print("Get one at: https://console.anthropic.com/")
+    if not os.getenv("GOOGLE_API_KEY"):  # Or GOOGLE_API_KEY if using Gemini
+        print("ERROR: GOOGLE_API_KEY not found in .env")
+        print("Get one at: https://aistudio.google.com/")
         exit(1)
     
     print("Testing LangGraph Workflow")

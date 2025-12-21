@@ -2,6 +2,7 @@
 langgraph==0.2.50
 langchain-core==0.3.28
 langchain-google-genai==2.0.5
+langchain-anthropic>=1.0.0
 google-generativeai==0.8.3
 
 # Data sources
