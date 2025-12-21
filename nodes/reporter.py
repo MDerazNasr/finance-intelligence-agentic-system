@@ -120,7 +120,7 @@ def reporter_node(state: Dict[str, Any]) -> Dict[str, Any]:
         if r["success"]:
             sucessful_results.append(r)
     if sucessful_results:
-        overall_confidence = sum(r["confidence"]) for r in sucessful_results / len(successful_results)
+        overall_confidence = sum(r["confidence"] for r in sucessful_results) / len(successful_results)
     else:
         overall_confidence = 0.0
     
@@ -276,4 +276,33 @@ def _format_successful_result(result: Dict[str, Any]) -> str:
         # Generic fallback for unknown tool types
         output.append(f"\n**Data:** {data}")
     
+    return "\n".join(output)
+
+def _format_failed_result(result: Dict[str, Any]) -> str:
+    '''
+    Formats a failed tool result for display.
+
+    When a tool fails, we want to:
+    1. Show it failed clearly
+    2. Explain why (error message)
+    3. Not crash the whole report
+
+    Args:
+        result: A ToolResult that failed
+    Returns:
+        Formatted error message
+    '''
+    output = []
+
+    output.append(f"\n**Status:** Failed")
+    output.append(f"**Error:** {result.get('error', 'Unknown error')}")
+
+    #Add helpful context
+    params = result.get("parameters, {}")
+    if params:
+        output.append(f"**Parameters:** {params}")
+    
+    #Suggest what to do
+    output.append(f"\n *Tip: Try a different query of check the parameter values*")
+
     return "\n".join(output)
