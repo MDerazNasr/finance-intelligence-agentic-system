@@ -126,5 +126,112 @@ def _get_competitors_by_sector(
     target_market_cap: float
 ) -> List[Dict[str, Any]]:
     '''
+    Finds competitors using sector + market cap filtering.
+    
+    Strategy:
+    1. Use a predefined list of major tickers by sector
+    2. Filter to the same sector
+    3. Filter by similar market cap (0.3x to 3x)
+    4. Exclude the target company itself
+    
+    Why this approach?
+    - yfinance doesn't have a "search by sector" API
+    - We maintain a curated list of major companies
+    - This is fast and doesn't require web scraping
+    - Good enough for demo purposes
+    
+    Args:
+        ticker: Target company ticker
+        sector: Target company's sector
+        industry: Target company's industry
+        target_market_cap: Target company's market cap
+        
+    Returns:
+        List of competitor dicts with ticker, name, market_cap
     '''
-    pass 
+    #Predefined list of major public companies by sector
+    #In production, this would be a database or API call
+    MAJOR_TICKERS_BY_SECTOR = {
+        "Technology": [
+            "AAPL", "MSFT", "GOOGL", "META", "NVDA", "TSLA", "AVGO", "ORCL",
+            "ADBE", "CRM", "CSCO", "ACN", "AMD", "INTC", "IBM", "QCOM", "TXN"
+        ],
+        "Consumer Cyclical": [
+            "AMZN", "TSLA", "HD", "NKE", "MCD", "SBUX", "TM", "F", "GM",
+            "BKNG", "LOW", "TGT", "ABNB", "MAR", "RIVN", "LCID"
+        ],
+        "Healthcare": [
+            "UNH", "JNJ", "LLY", "ABBV", "MRK", "TMO", "ABT", "PFE", "DHR",
+            "BMY", "AMGN", "CVS", "CI", "ELV", "HCA", "ISRG"
+        ],
+        "Financial Services": [
+            "BRK-B", "JPM", "V", "MA", "BAC", "WFC", "MS", "GS", "SPGI",
+            "BLK", "C", "AXP", "CB", "PGR", "MMC", "SCHW"
+        ],
+        "Communication Services": [
+            "META", "GOOGL", "GOOG", "NFLX", "DIS", "CMCSA", "TMUS", "VZ", "T"
+        ],
+        "Consumer Defensive": [
+            "WMT", "PG", "COST", "KO", "PEP", "PM", "MO", "EL", "CL", "KMB"
+        ],
+        "Energy": [
+            "XOM", "CVX", "COP", "SLB", "EOG", "MPC", "PSX", "VLO", "OXY"
+        ],
+        "Industrials": [
+            "UPS", "RTX", "HON", "UNP", "BA", "CAT", "GE", "LMT", "DE", "MMM"
+        ],
+        "Basic Materials": [
+            "LIN", "APD", "ECL", "SHW", "DD", "NEM", "FCX", "NUE"
+        ],
+        "Real Estate": [
+            "PLD", "AMT", "EQIX", "PSA", "WELL", "DLR", "O", "SPG"
+        ],
+        "Utilities": [
+            "NEE", "DUK", "SO", "D", "AEP", "SRE", "EXC", "XEL"
+        ]
+    }
+
+    #Get tickers for this sector
+    sector_tickers = MAJOR_TICKERS_BY_SECTOR.get(sector, [])
+
+    if not sector_tickers:
+        #unknown sector, return empty
+        return []
+    
+    #get info for each ticker in the sector
+    competitors = []
+    for comp_ticker in sector_tickers:
+        #skip target company
+        if comp_ticker == ticker:
+            continue
+        try:
+            comp = yf.Ticker(comp_ticker)
+            comp_info = comp.info
+        
+            #Get market cap
+            comp_market_cap = comp_info.get('marketCap', 0)
+
+            #Filter by similar market cap (0.3x to 3x)
+            #This ensure we're comparing companies of similar size
+            if target_market_cap > 0:
+                ratio = comp_market_cap / target_market_cap
+                if ratio < 0.3 or ratio > 3.0:
+                    continue #too diffrent in size
+            #Add to competitors list
+            competitors.append({
+                "ticker": comp_ticker,
+                "name": comp_info.get('longName', comp_ticker),
+                "market_cap": comp_market_cap,
+                "industry": comp_info.get('industry', 'Unknown')
+            })
+        except Exception as e:
+            #skip this ticker if there's an error
+            continue
+    # Sort by market cap (closest to target first) 
+    if target_market_cap > 0:
+        competitors.sort(
+            key=lambda x: abs(x['market_cap'] - target_market_cap)
+        )
+    return competitors
+
+
