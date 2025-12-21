@@ -234,4 +234,24 @@ def _get_competitors_by_sector(
         )
     return competitors
 
+def _create_error_result(ticker: str, error_msg: str) -> Dict[str, Any]:
+    '''
+    Creates a standardized error result
+
+    Args:
+        ticker: The ticker that failed
+        error_msg: Description of what went wrong 
+    Returns:
+        ToolResult dict with error info
+    '''
+    return {
+        "tool_name": "find_competitors",
+        "parameters": {"ticker": ticker},
+        "data": None,
+        "source": "yfinance",
+        "timestamp": datetime.utcnow().isoformat(),
+        "confidence": 0.0,
+        "success": False,
+        "error": error_msg
+    }
 
