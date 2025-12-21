@@ -333,3 +333,37 @@ def _get_confidence_emoji(confidence: float) -> str:
         return "🟠"  # Orange - Low confidence
     else:
         return "🔴"  # Red - Very low confidence
+    
+def _format_currency(amount: float) -> str:
+    """
+    Formats a number as currency with appropriate suffixes.
+    
+    This makes large numbers readable:
+    - 94930000000 → "$94.93B"
+    - 1500000000 → "$1.50B"
+    - 25000000 → "$25.00M"
+    - 500000 → "$500.00K"
+    
+    Args:
+        amount: Dollar amount (raw number)
+        
+    Returns:
+        Formatted string with B/M/K suffix
+        
+    Why this matters:
+    - Professional terminals show "$94.93B" not "$94,930,000,000"
+    - Easier to read and compare
+    - Shows attention to UX detail
+    """
+    if abs(amount) >= 1_000_000_000:
+        # Billions
+        return f"${amount / 1_000_000_000:.2f}B"
+    elif abs(amount) >= 1_000_000:
+        # Millions
+        return f"${amount / 1_000_000:.2f}M"
+    elif abs(amount) >= 1_000:
+        # Thousands
+        return f"${amount / 1_000:.2f}K"
+    else:
+        # Just dollars
+        return f"${amount:.2f}"
