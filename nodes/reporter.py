@@ -72,18 +72,17 @@ def reporter_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     #Build answer
     answer_parts = []
-
-    answer_parts.append("\n No data was retrieved. Please try a different query. \n")
-    answer_parts.append(f"Query:** {query}\n")
+    answer_parts.append(f"# Analysis Results\n")
+    answer_parts.append(f"**Query:** {query}\n")
 
     #Check if we have any results
     if not tool_results:
-        answer_parts.append("\n No data was retrieved. Please try a different query.\n")
+        answer_parts.append("\n⚠️ No data was retrieved. Please try a different query.\n")
         execution_log.append("No tool results to report")    
     else:
         execution_log.append(f"   📝 Formatting {len(tool_results)} result(s)")
 
-    #Format each tool result
+        #Format each tool result
         for i, result in enumerate(tool_results, 1):
             answer_parts.append(f"\n---\n")
             answer_parts.append(f"\n## Result {i}: {result['tool_name']}")
@@ -115,17 +114,17 @@ def reporter_node(state: Dict[str, Any]) -> Dict[str, Any]:
             pass
 
     #Calculate overall confidence (average of all successful results)
-    sucessful_results = []
+    successful_results = []
     for r in tool_results:
         if r["success"]:
-            sucessful_results.append(r)
-    if sucessful_results:
-        overall_confidence = sum(r["confidence"] for r in sucessful_results) / len(successful_results)
+            successful_results.append(r)
+    if successful_results:
+        overall_confidence = sum(r["confidence"] for r in successful_results) / len(successful_results)
     else:
         overall_confidence = 0.0
     
     #Count successes and failures
-    num_success = len(sucessful_results)
+    num_success = len(successful_results)
     num_failed = len(tool_results) - num_success
 
     execution_log.append(
@@ -198,7 +197,7 @@ def _format_successful_result(result: Dict[str, Any]) -> str:
     output.append(f"**Source:** {result['source']}")
 
     #Format based on tool type
-    if tool_name == "get_quarterly_financials" and data:
+    if tool_name in ["get_quarterly_financials", "sec_analyzer"] and data:
         #Format SEC financial data
         output.append(f"\n**Company:** {data.get('company_name', 'Unknown')}")
         output.append(f"**Filing Date:** {data.get('filing_date', 'Unknown')}")

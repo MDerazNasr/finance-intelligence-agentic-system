@@ -63,7 +63,7 @@ def get_llm():
         )
     
     return ChatGoogleGenerativeAI(
-        model="gemini-3-flash",  # Latest model (Dec 17, 2025)
+        model="gemini-2.0-flash",  # Fast and efficient Gemini model
         temperature=0,            # Deterministic for planning
         google_api_key=api_key
     )

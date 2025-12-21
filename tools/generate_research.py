@@ -25,7 +25,7 @@ import os
 from typing import Dict, Any
 from datetime import datetime
 from tavily import TavilyClient
-from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 def general_financial_research(query: str) -> Dict[str, Any]:
@@ -65,11 +65,11 @@ def general_financial_research(query: str) -> Dict[str, Any]:
             })
             context.append(result.get("content", ""))
         
-        # Use Claude to synthesize answer
-        llm = ChatAnthropic(
-            model="claude-3-5-sonnet-20241022",
+        #Use gemini to get answers 
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-pro",
             temperature=0,
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
+            google_api_key="your-api-key-here"
         )
         
         synthesis_prompt = f"""Based on these web search results, answer the question concisely and accurately.

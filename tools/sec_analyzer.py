@@ -38,55 +38,73 @@ def get_latest_quarterly_financials(ticker: str) -> ToolResult:
         #Get company
         company = Company(ticker.upper())
         #get latest 10-Q
-        filings = company.get_filings(form="10-Q").latest(1)
-        if not filings:
+        filing = company.get_filings(form="10-Q").latest(1)
+        if not filing:
             return _error_result(ticker, "No 10-Q filings found")
         
-        filing = filings[0]
-        xbrl = filings.xbrl()
+        xbrl = filing.xbrl()
 
         if not xbrl:
             return _error_result(ticker, "XBRL not available")
         
-        #Extract metrics using GAAP tags
+        #Extract metrics using GAAP tags from facts DataFrame
         financials = {}
-
-        #Revenue
-        for tag in ["us-gaap:Revenues", "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax"]:
+        facts_df = xbrl.instance.facts
+        
+        #Revenue - search for revenue-related concepts
+        revenue_tags = ["us-gaap:Revenues", "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax"]
+        for tag in revenue_tags:
             try:
-                value = xbrl[tag]
-                if value:
-                    financials["revuenue"] = {
-                        "value": float(value),
-                        "label": "Revenue",
-                        "tag": tag
-                    }
-                    break
-            except (KeyError, TypeError):
+                rev_facts = facts_df[facts_df['concept'] == tag]
+                if len(rev_facts) > 0:
+                    # Find first numeric value (skip period strings like "P1Y")
+                    for idx, row in rev_facts.iterrows():
+                        try:
+                            value = float(row['value'])
+                            financials["revenue"] = {
+                                "value": value,
+                                "label": "Revenue",
+                                "tag": tag
+                            }
+                            break
+                        except (ValueError, TypeError):
+                            continue
+                    if "revenue" in financials:
+                        break
+            except (KeyError, TypeError, AttributeError, ValueError, IndexError):
                 continue
         
         #Net income
         try:
-            value = xbrl["us-gaap:NetIncomeLoss"]
-            if value:
-                financials["net_income"] = {
-                    "value": float(value),
-                    "label": "Net Income",
-                    "tag": "us-gaap:NetIncomeLoss"
-                }
-        except (KeyError, TypeError):
+            ni_facts = facts_df[facts_df['concept'] == "us-gaap:NetIncomeLoss"]
+            if len(ni_facts) == 0:
+                # Try case-insensitive search
+                ni_facts = facts_df[facts_df['concept'].str.contains('NetIncome', case=False, na=False)]
+            if len(ni_facts) > 0:
+                value = ni_facts.iloc[0]['value']
+                tag = ni_facts.iloc[0]['concept']
+                if value is not None:
+                    financials["net_income"] = {
+                        "value": float(value),
+                        "label": "Net Income",
+                        "tag": tag
+                    }
+        except (KeyError, TypeError, AttributeError, ValueError, IndexError):
             pass
         if not financials:
             return _error_result(ticker, "Could not extract financials")
         
         #Build result
+        filing_date = filing.filing_date.isoformat() if hasattr(filing.filing_date, 'isoformat') else str(filing.filing_date)
+        report_date = filing.report_date.isoformat() if hasattr(filing, 'report_date') and hasattr(filing.report_date, 'isoformat') else (str(filing.report_date) if hasattr(filing, 'report_date') else None)
+        
         data = {
             "ticker": ticker.upper(),
             "company_name": company.name,
-            "filing_date": filing.filing_date.isoformat(),
-            "period_end": filing.period_of_report.isoformat() if filing.period_of_report else None,
+            "filing_date": filing_date,
+            "period_end": report_date,
             "financials": financials,
-            "filing_url": filing.url
+            "filing_url": filing.url if hasattr(filing, 'url') else str(filing)
         }
 
         return ToolResult(
@@ -94,7 +112,7 @@ def get_latest_quarterly_financials(ticker: str) -> ToolResult:
             parameters={"ticker": ticker},
             data=data,
             source=filing.url,
-            timestamp=datetime.utc.now().isoformat(),
+            timestamp=datetime.utcnow().isoformat(),
             confidence=1.0, #XBRL = highest confidence
             success=True,
             error=None
