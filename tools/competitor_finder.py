@@ -255,3 +255,38 @@ def _create_error_result(ticker: str, error_msg: str) -> Dict[str, Any]:
         "error": error_msg
     }
 
+# FOR TESTING
+
+if __name__ == "__main__":
+    """
+    Test the competitor finder with various companies.
+    """
+    
+    test_tickers = [
+        ("TSLA", "Tesla - should find Ford, GM, Rivian"),
+        ("AAPL", "Apple - should find Microsoft, Google, Meta"),
+        ("JPM", "JPMorgan - should find BAC, WFC, C")
+    ]
+    
+    for ticker, description in test_tickers:
+        print("=" * 70)
+        print(f"Testing: {description}")
+        print("=" * 70)
+        
+        result = find_competitors(ticker)
+        
+        if result["success"]:
+            data = result["data"]
+            print(f"Target: {data['target_company']}")
+            print(f"Sector: {data['sector']}")
+            print(f"Industry: {data['industry']}")
+            print(f"\nCompetitors found: {data['total_found']}")
+            print("\nTop 5:")
+            
+            for i, comp in enumerate(data['competitors'][:5], 1):
+                market_cap_b = comp['market_cap'] / 1_000_000_000
+                print(f"{i}. {comp['ticker']}: {comp['name']} (${market_cap_b:.1f}B)")
+        else:
+            print(f"Error: {result['error']}")
+        
+        print("\n")
