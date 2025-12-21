@@ -367,3 +367,22 @@ def _format_currency(amount: float) -> str:
     else:
         # Just dollars
         return f"${amount:.2f}"
+
+def _calculate_confidence_color(confidence: float) -> str:
+    """
+    Returns a color code for confidence (for future UI use).
+    
+    This will be used in the Streamlit UI to color-code confidence scores.
+    
+    Args:
+        confidence: Float between 0.0 and 1.0
+        
+    Returns:
+        Color name (for Streamlit)
+    """
+    if confidence >= 0.8:
+        return "green"
+    elif confidence >= 0.5:
+        return "orange"
+    else:
+        return "red"
