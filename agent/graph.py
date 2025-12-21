@@ -141,10 +141,57 @@ def run_agent(query: str) -> dict:
 
 #for vizualization
 def get_graph_visualization():
-    '''
-    returns
-    '''
-    pass
+    """
+    Returns a string representation of the graph structure.
+    
+    This is useful for:
+    - Debugging (see how nodes are connected)
+    - Documentation (show the flow in README)
+    - Interviews (draw it on screen)
+    
+    Returns:
+        ASCII art representation of the graph
+        
+    Example output:
+        START → planner → executor → reporter → END
+    """
+    return """
+    Agent Workflow (Phase 1):
+    
+    ┌─────────┐
+    │  START  │
+    └────┬────┘
+         │
+         ▼
+    ┌─────────────┐
+    │   PLANNER   │  ← Uses LLM to decompose query
+    │             │    into tool calls
+    └──────┬──────┘
+           │
+           ▼
+    ┌─────────────┐
+    │  EXECUTOR   │  ← Runs each tool and collects
+    │             │    results with metadata
+    └──────┬──────┘
+           │
+           ▼
+    ┌─────────────┐
+    │  REPORTER   │  ← Formats results into clean
+    │             │    answer with audit trail
+    └──────┬──────┘
+           │
+           ▼
+    ┌─────────┐
+    │   END   │
+    └─────────┘
+    
+    State Flow:
+    1. Input:  {"query": "What was Apple's revenue?"}
+    2. Planner adds: {"plan": [...], "plan_reasoning": "..."}
+    3. Executor adds: {"tool_results": [...], "execution_log": [...]}
+    4. Reporter adds: {"answer": "...", "audit_trail": {...}}
+    5. Output: Complete state with all fields populated
+    """
 
 
 
