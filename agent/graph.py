@@ -14,7 +14,8 @@ Why LangGraph?
 - Allows complex routing (we'll add validation loops in Phase 3)
 - Industry standard for production agentic systems
 '''
-
+import os
+from dotenv import load_dotenv
 from typing import Literal
 from langgraph.graph import StateGraph, END
 from agent.state import AgentState, create_initial_state
@@ -193,5 +194,63 @@ def get_graph_visualization():
     5. Output: Complete state with all fields populated
     """
 
+#Main - for testing
+
+if __name__ == "__main__":
+    '''
+    Test graph with sample query
+    runs when python agent/graph.py is executed
+    '''
+
+    # Load environment variables
+    load_dotenv()
+    
+    # Check for API key
+    if not os.getenv("ANTHROPIC_API_KEY"):  # Or GOOGLE_API_KEY if using Gemini
+        print("ERROR: ANTHROPIC_API_KEY not found in .env")
+        print("Get one at: https://console.anthropic.com/")
+        exit(1)
+    
+    print("Testing LangGraph Workflow")
+    print("=" * 70)
+    
+    # Test query
+    test_query = "What was Apple's revenue in their latest quarterly report?"
+    print(f"\nQuery: {test_query}")
+    print("=" * 70)
+    
+    try:
+        # Run the agent
+        result = run_agent(test_query)
+        
+        # Print execution log
+        print("\nEXECUTION LOG:")
+        print("-" * 70)
+        for log_entry in result.get("execution_log", []):
+            print(log_entry)
+        
+        # Print final answer
+        print("\n" + "=" * 70)
+        print("FINAL ANSWER:")
+        print("=" * 70)
+        print(result.get("answer", "No answer generated"))
+        
+        # Print metrics
+        print("\n" + "=" * 70)
+        print("METRICS:")
+        print("=" * 70)
+        print(f"Overall Confidence: {result.get('overall_confidence', 0):.0%}")
+        print(f"Total Latency: {result.get('total_latency_ms', 0):.0f}ms")
+        print(f"Retry Count: {result.get('retry_count', 0)}")
+        
+        # Success!
+        print("\n" + "=" * 70)
+        print("GRAPH TEST COMPLETE!")
+        print("=" * 70)
+        
+    except Exception as e:
+        print(f"\nERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 
