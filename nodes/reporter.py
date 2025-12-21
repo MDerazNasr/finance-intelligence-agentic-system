@@ -306,3 +306,30 @@ def _format_failed_result(result: Dict[str, Any]) -> str:
     output.append(f"\n *Tip: Try a different query of check the parameter values*")
 
     return "\n".join(output)
+
+#Helper Functions
+def _get_confidence_emoji(confidence: float) -> str:
+    '''
+    Returns an emoji based on confidence level.
+
+    This is a visual indicator of data quality:
+    - 🟢 High confidence (0.8-1.0): Official, audited data
+    - 🟡 Medium confidence (0.5-0.8): Reliable but derived
+    - 🟠 Low confidence (0.3-0.5): Best effort, might be outdated
+    - 🔴 Very low confidence (0.0-0.3): Unreliable
+    
+    Args:
+        confidence: Float between 0.0 and 1.0
+        
+    Returns:
+        Emoji string    
+    '''
+
+    if confidence >= 0.8:
+        return "🟢"  # Green - High confidence
+    elif confidence >= 0.5:
+        return "🟡"  # Yellow - Medium confidence
+    elif confidence >= 0.3:
+        return "🟠"  # Orange - Low confidence
+    else:
+        return "🔴"  # Red - Very low confidence
