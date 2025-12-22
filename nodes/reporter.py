@@ -223,15 +223,26 @@ def _format_successful_result(result: Dict[str, Any]) -> str:
             output.append(f"\n[View SEC Filing]({filing_url})")
 
     elif tool_name == "find_competitors" and data:
-        # Format competitor data (Phase 2)
+        # Format competitor data
         competitors = data.get("competitors", [])
+        data_source = data.get("data_source_used", "unknown")  # ← ADD THIS
+        fallback_reason = data.get("fallback_reason")          # ← ADD THIS
+        
+        output.append(f"\n**Data Source:** {data_source.title()}")  # ← ADD THIS
+        
+        # Show fallback reason if applicable
+        if fallback_reason:  # ← ADD THIS BLOCK
+            output.append(f"**Note:** Fallback used - {fallback_reason}")
+        
         output.append(f"\n**Competitors Found:** {len(competitors)}")
         
         for comp in competitors[:5]:  # Show top 5
             ticker = comp.get("ticker", "")
             name = comp.get("name", "")
-            output.append(f"- **{ticker}:** {name}")
-    
+            market_cap = comp.get("market_cap", 0)
+            formatted_cap = _format_currency(market_cap)
+            output.append(f"- **{ticker}:** {name} (Market Cap: {formatted_cap})")    
+            
     elif tool_name == "get_top_companies" and data:
         # Format top companies data (Phase 2)
         companies = data.get("companies", [])

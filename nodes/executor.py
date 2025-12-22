@@ -203,10 +203,10 @@ def _route_to_tool(
             )
         # Call the actual tool
         return get_latest_quarterly_financials(ticker)
-    
-    #Tool 2 - Competitor Finder
+    # Tool 2: Competitor Finder
     elif tool_name == "find_competitors":
         ticker = parameters.get("ticker", "")
+        limit = parameters.get("limit", 5)  # ← ADD THIS LINE
         
         if not ticker:
             return ToolResult(
@@ -220,8 +220,8 @@ def _route_to_tool(
                 error="Missing required parameter: ticker"
             )
         
-        # Call the actual tool
-        return find_competitors(ticker)
+        # Call with limit parameter
+        return find_competitors(ticker, limit=limit)  # ← UPDATE THIS LINE
     # Tool 3: Top Companies Ranker (Phase 2)
     
     elif tool_name == "get_top_companies":

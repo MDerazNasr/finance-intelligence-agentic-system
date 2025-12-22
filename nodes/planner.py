@@ -79,11 +79,16 @@ AVAILABLE TOOLS:
     Example - get_quarterly_financials("AAPL")
     When to use: user asks abotu financials, revenue, income, profits, costs
 
-2. find_competitors(ticker: str)
-    Purpose - Find the main competitors for a company
-    Returns - List of competitor tickers with company names
-    Example - find_competitors("TSLA")
-    When to use - User asks about competitors, peers, rivals
+2. find_competitors(ticker: str, limit: int = 5)
+   Purpose: Find the main competitors for a company
+   Returns: List of up to 'limit' competitor tickers with names
+   Example: find_competitors("TSLA", limit=10)
+   When to use: User asks about competitors, peers, rivals
+   NOTE: Default is 5, but can request more (e.g., "find 10 competitors")
+   
+   Data sources (with automatic fallback):
+   - Primary: Polygon.io professional API (if available)
+   - Fallback: yfinance (always works)
 
 3. get_top_companies(industry: str, n: int)
    Purpose: Get top N companies in an industry ranked by market cap

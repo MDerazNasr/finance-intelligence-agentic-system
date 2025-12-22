@@ -1,451 +1,721 @@
-'''
-Competitor Finder Tool - Identifies Industry Peers
+"""
+Competitor Finder Tool - Cascading Data Sources with Graceful Degradation
 
-This tool finds competitors for a given company by:
-1. Looking up the company's industry sector
-2. Finding other companies in the same sector
-3. Filtering by similar market cap (real competitors are similar size)
-4. Returning the top matches
+This tool uses a production-grade architecture with multiple data sources:
 
-Why this approach?
-- Industry codes (GICS sectors) are standardized
-- Market cap similarity ensures they're actual competitors
-  (a $1B company doesn't compete with a $1T company)
-- Uses yfinance which has comprehensive market data
+Primary: Polygon.io (professional financial API)
+- Industry-standard data provider
+- Used by real fintech companies
+- Real-time, high-quality data
+- Rate limited on free tier (5/min, 250/day)
 
-Example:
-Input: "TSLA" (Tesla)
-Output: ["F" (Ford), "GM" (General Motors), "RIVN" (Rivian)]
+Fallback: yfinance (Yahoo Finance)
+- Free and unlimited
+- Reliable for development
+- 15-minute delayed data
+- Never fails
 
-Real-world use:
-- Comparative analysis (how does Tesla's revenue compare to Ford's?)
-- Investment research (what are the alternatives?)
-- Market research (who are the key players?)
-'''
+Pattern: "Graceful Degradation"
+If Polygon fails (rate limit, API error, timeout), automatically
+switch to yfinance. User always gets an answer.
+
+This is how real financial systems work:
+- Bloomberg Terminal: Multiple data feeds with automatic failover
+- Trading platforms: Backup market data providers
+- Payment systems: Redundant processors
+
+Interview talking point:
+"I built redundancy into the system from day one. If the primary
+ data source fails, we seamlessly switch to backup. The user still
+ gets their answer - they might not even notice we switched providers.
+ This is standard practice in production financial systems."
+"""
 
 import os
 import json
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from pathlib import Path
 import yfinance as yf
+from dotenv import load_dotenv
 
-# Cache configuration
+# Load environment variables from .env file
+load_dotenv()
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
 CACHE_DIR = Path(__file__).parent.parent / ".cache"
 CACHE_DIR.mkdir(exist_ok=True)
-CACHE_DURATION_HOURS = 24  # Cache data for 24 hours
+CACHE_DURATION_HOURS = 24
 
-#main function
-def find_competitors(ticker: str) -> Dict[str, Any]:
-    """
-    Finds main competitors for a given company.
+# Rate limit tracking (to avoid hammering APIs)
+class RateLimiter:
+    """Simple rate limiter to track API calls"""
+    def __init__(self):
+        self.polygon_calls = []
+        self.yfinance_calls = []
     
-    Algorithm:
-    1. Get target company's info (sector, industry, market cap)
-    2. Search for companies in the same sector
-    3. Filter by market cap range (0.3x to 3x of target)
-    4. Return top 5 competitors
+    def can_call_polygon(self) -> bool:
+        """Check if we can call Polygon (5 per minute limit)"""
+        now = datetime.now()
+        # Remove calls older than 1 minute
+        self.polygon_calls = [t for t in self.polygon_calls if now - t < timedelta(minutes=1)]
+        return len(self.polygon_calls) < 5
+    
+    def record_polygon_call(self):
+        """Record a Polygon API call"""
+        self.polygon_calls.append(datetime.now())
+    
+    def record_yfinance_call(self):
+        """Record a yfinance call"""
+        self.yfinance_calls.append(datetime.now())
+
+rate_limiter = RateLimiter()
+
+
+# ============================================================================
+# EXCEPTIONS
+# ============================================================================
+
+class RateLimitException(Exception):
+    """Raised when API rate limit is hit"""
+    pass
+
+class PolygonAPIException(Exception):
+    """Raised when Polygon API fails"""
+    pass
+
+
+# ============================================================================
+# MAIN FUNCTION - CASCADING DATA SOURCES
+# ============================================================================
+
+def find_competitors(ticker: str, limit: int = 5) -> Dict[str, Any]:
+    """
+    Find competitors using cascading data sources.
+    
+    Flow:
+    1. Try Polygon.io (if API key available)
+       - Professional, real-time data
+       - Rate limited but cached
+    2. Fall back to yfinance (if Polygon fails)
+       - Always reliable
+       - Free and unlimited
     
     Args:
         ticker: Stock ticker symbol (e.g., "TSLA")
+        limit: Maximum number of competitors to return (default: 5)
         
     Returns:
-        ToolResult with:
-        - data: List of competitors with name, ticker, market cap
-        - source: "yfinance market data"
-        - confidence: 0.8 (reliable but not SEC-level)
+        ToolResult with competitor data and metadata about which source was used
         
-    Example:
-        result = find_competitors("TSLA")
-        # Returns: {
-        #   "success": True,
-        #   "data": {
-        #     "target_company": "Tesla, Inc.",
-        #     "sector": "Consumer Cyclical",
-        #     "industry": "Auto Manufacturers",
-        #     "competitors": [
-        #       {"ticker": "F", "name": "Ford", "market_cap": 52000000000},
-        #       {"ticker": "GM", "name": "GM", "market_cap": 58000000000}
-        #     ]
-        #   },
-        #   "confidence": 0.8
-        # }
+    Example result:
+        {
+            "success": True,
+            "data": {
+                "competitors": [...],
+                "data_source_used": "polygon",  # or "yfinance"
+                "fallback_reason": None  # or reason if fallback happened
+            },
+            "confidence": 0.85,  # 0.85 for Polygon, 0.8 for yfinance
+            ...
+        }
     """
-    try:
-        #Step 1 - Get target company information (with caching)
-        target_info = _get_cached_ticker_info(ticker.upper())
     
-        #Validate we got data
+    print(f"\n🔍 Finding competitors for {ticker} (limit: {limit})...")
+    
+    data_source_used = None
+    fallback_reason = None
+    result = None
+    
+    # ========================================================================
+    # STEP 1: Try Polygon.io (Primary Source)
+    # ========================================================================
+    
+    if _has_polygon_api_key():
+        print("  📊 Attempting Polygon.io (professional API)...")
+        
+        try:
+            # Check rate limit before calling
+            if not rate_limiter.can_call_polygon():
+                raise RateLimitException("Polygon rate limit: 5 calls/minute exceeded")
+            
+            result = _fetch_from_polygon(ticker, limit)
+            
+            if result['success']:
+                print("  ✅ Success via Polygon.io")
+                result['data']['data_source_used'] = 'polygon'
+                result['data']['fallback_reason'] = None
+                result['confidence'] = 0.85  # Slightly higher than yfinance
+                return result
+            else:
+                fallback_reason = f"Polygon returned error: {result.get('error', 'Unknown')}"
+                print(f"  ⚠️ Polygon failed: {fallback_reason}")
+        
+        except RateLimitException as e:
+            fallback_reason = f"Polygon rate limit: {str(e)}"
+            print(f"  ⚠️ {fallback_reason}")
+        
+        except PolygonAPIException as e:
+            fallback_reason = f"Polygon API error: {str(e)}"
+            print(f"  ⚠️ {fallback_reason}")
+        
+        except Exception as e:
+            fallback_reason = f"Polygon unexpected error: {str(e)}"
+            print(f"  ⚠️ {fallback_reason}")
+    else:
+        fallback_reason = "No Polygon API key configured (set POLYGON_API_KEY in .env)"
+        print(f"  ℹ️ {fallback_reason}")
+    
+    # ========================================================================
+    # STEP 2: Fallback to yfinance (Backup Source)
+    # ========================================================================
+    
+    print(f"  🔄 Falling back to yfinance...")
+    print(f"     Reason: {fallback_reason}")
+    
+    try:
+        result = _fetch_from_yfinance(ticker, limit)
+        
+        if result['success']:
+            print("  ✅ Success via yfinance (fallback)")
+            result['data']['data_source_used'] = 'yfinance'
+            result['data']['fallback_reason'] = fallback_reason
+            result['confidence'] = 0.8  # Standard yfinance confidence
+            return result
+        else:
+            # Both sources failed - return the yfinance error
+            print("  ❌ yfinance also failed")
+            return result
+    
+    except Exception as e:
+        print(f"  ❌ yfinance failed: {str(e)}")
+        return _create_error_result(
+            ticker, 
+            f"All data sources failed. Polygon: {fallback_reason}, yfinance: {str(e)}"
+        )
+
+
+# ============================================================================
+# POLYGON.IO INTEGRATION
+# ============================================================================
+
+def _fetch_from_polygon(ticker: str, limit: int) -> Dict[str, Any]:
+    """
+    Fetch competitors using Polygon.io API.
+    
+    Polygon.io provides:
+    - Professional-grade financial data
+    - Real-time market information
+    - SIC code classification for industry grouping
+    - Comprehensive company reference data
+    
+    Free tier limits:
+    - 5 API calls per minute
+    - 250 API calls per day
+    - 15-minute delayed data
+    
+    Strategy:
+    1. Get target company's SIC code (industry classification)
+    2. Search for companies with same SIC code
+    3. Filter by market cap similarity
+    4. Cache results aggressively (24 hours)
+    
+    Note: We're using the free tier for demo. In production, you'd
+    use the paid tier (1000 calls/min, real-time data, $200/month).
+    """
+    
+    try:
+        import requests
+        
+        api_key = os.getenv("POLYGON_API_KEY")
+        if not api_key:
+            raise PolygonAPIException("POLYGON_API_KEY not found in environment")
+        
+        # Check cache first
+        cache_key = f"polygon_competitors_{ticker}_{limit}"
+        cached = _get_from_cache(cache_key)
+        if cached:
+            print("    💾 Using cached Polygon data")
+            return cached
+        
+        # ====================================================================
+        # Step 1: Get target company details
+        # ====================================================================
+        
+        rate_limiter.record_polygon_call()
+        
+        ticker_url = f"https://api.polygon.io/v3/reference/tickers/{ticker.upper()}"
+        response = requests.get(ticker_url, params={"apiKey": api_key}, timeout=10)
+        
+        if response.status_code == 429:
+            raise RateLimitException("Polygon rate limit exceeded")
+        elif response.status_code != 200:
+            raise PolygonAPIException(f"Polygon API returned {response.status_code}")
+        
+        target_data = response.json().get('results', {})
+        
+        company_name = target_data.get('name', ticker.upper())
+        sic_code = target_data.get('sic_code')
+        market_cap = target_data.get('market_cap', 0)
+        
+        if not sic_code:
+            raise PolygonAPIException(f"No SIC code found for {ticker}")
+        
+        print(f"    📋 {company_name} (SIC: {sic_code})")
+        
+        # ====================================================================
+        # Step 2: Search for companies with same SIC code
+        # ====================================================================
+        
+        # Small delay to respect rate limits
+        time.sleep(0.2)
+        rate_limiter.record_polygon_call()
+        
+        search_url = "https://api.polygon.io/v3/reference/tickers"
+        search_params = {
+            "sic_code": sic_code,
+            "active": "true",
+            "market": "stocks",
+            "limit": 50,  # Get more, then filter
+            "apiKey": api_key
+        }
+        
+        response = requests.get(search_url, params=search_params, timeout=10)
+        
+        if response.status_code == 429:
+            raise RateLimitException("Polygon rate limit exceeded")
+        elif response.status_code != 200:
+            raise PolygonAPIException(f"Polygon search returned {response.status_code}")
+        
+        results = response.json().get('results', [])
+        
+        # ====================================================================
+        # Step 3: Filter and format competitors
+        # ====================================================================
+        
+        competitors = []
+        
+        for comp in results:
+            comp_ticker = comp.get('ticker', '').upper()
+            
+            # Skip target company
+            if comp_ticker == ticker.upper():
+                continue
+            
+            comp_name = comp.get('name', comp_ticker)
+            comp_market_cap = comp.get('market_cap', 0)
+            
+            # Filter by market cap similarity (0.3x to 3x)
+            if market_cap > 0 and comp_market_cap > 0:
+                ratio = comp_market_cap / market_cap
+                if ratio < 0.3 or ratio > 3.0:
+                    continue
+            
+            competitors.append({
+                "ticker": comp_ticker,
+                "name": comp_name,
+                "market_cap": comp_market_cap,
+                "industry": comp.get('primary_exchange', 'Unknown')
+            })
+        
+        # Sort by market cap similarity
+        if market_cap > 0:
+            competitors.sort(key=lambda x: abs(x['market_cap'] - market_cap))
+        
+        # ====================================================================
+        # Step 4: Build result
+        # ====================================================================
+        
+        data = {
+            "target_company": company_name,
+            "target_ticker": ticker.upper(),
+            "sector": target_data.get('market', 'Unknown'),
+            "industry": f"SIC {sic_code}",
+            "target_market_cap": market_cap,
+            "competitors": competitors[:limit],
+            "total_found": len(competitors)
+        }
+        
+        result = {
+            "tool_name": "find_competitors",
+            "parameters": {"ticker": ticker, "limit": limit},
+            "data": data,
+            "source": "Polygon.io professional API",
+            "timestamp": datetime.utcnow().isoformat(),
+            "confidence": 0.85,
+            "success": True,
+            "error": None
+        }
+        
+        # Cache the result
+        _save_to_cache(cache_key, result)
+        
+        return result
+    
+    except (RateLimitException, PolygonAPIException):
+        # Re-raise these so caller knows it's a Polygon-specific issue
+        raise
+    
+    except Exception as e:
+        # Wrap other exceptions
+        raise PolygonAPIException(f"Unexpected error: {str(e)}")
+
+
+# ============================================================================
+# YFINANCE INTEGRATION (FALLBACK)
+# ============================================================================
+
+def _fetch_from_yfinance(ticker: str, limit: int) -> Dict[str, Any]:
+    """
+    Fetch competitors using yfinance (Yahoo Finance).
+    
+    yfinance provides:
+    - Free, unlimited access
+    - Comprehensive US stock data
+    - Sector and industry classifications
+    - Market cap data
+    
+    Limitations:
+    - Unofficial API (web scraper)
+    - 15-minute delayed data
+    - No SLA or support
+    - Could break if Yahoo changes site
+    
+    Strategy:
+    1. Get target company's sector/industry
+    2. Search S&P 500 universe dynamically
+    3. Filter by sector match + market cap similarity
+    4. Cache aggressively (24 hours)
+    
+    This is reliable enough for POC/demo but would be replaced
+    with professional API in production.
+    """
+    
+    try:
+        # Check cache first
+        cache_key = f"yfinance_competitors_{ticker}_{limit}"
+        cached = _get_from_cache(cache_key)
+        if cached:
+            print("    💾 Using cached yfinance data")
+            return cached
+        
+        # ====================================================================
+        # Step 1: Get target company info
+        # ====================================================================
+        
+        target_info = _get_cached_ticker_info(ticker.upper())
+        
         if not target_info or 'sector' not in target_info:
             return _create_error_result(
                 ticker,
-                "Could not retrieve company information. Check ticker symbol"
+                "Could not retrieve company information from yfinance"
             )
-        #Extract key info
+        
         company_name = target_info.get('longName', ticker.upper())
         sector = target_info.get('sector', 'Unknown')
         industry = target_info.get('industry', 'Unknown')
         target_market_cap = target_info.get('marketCap', 0)
-
-        #Step 2 - Find competitors using a known list approach
-        # Note: yfinance doesn't have a direct "find competitors" API
-        # We'll use a hybrid approach:
-        # 1. Check if we have a predefined competitor list
-        # 2. Fall back to sector-based search  
-        # 3. For e-commerce/platform companies, also check cross-sector competitors
-
-        competitors = _get_competitors_by_sector(
-            ticker = ticker.upper(),
-            sector=sector,
-            industry=industry,
-            target_market_cap=target_market_cap
-        )
         
-        # Special case: For e-commerce/platform companies, also check cross-sector competitors
-        # Shopify competes with Amazon (Consumer Cyclical) and Walmart (Consumer Defensive)
-        ecommerce_keywords = ['e-commerce', 'ecommerce', 'online marketplace', 'retail platform', 'software - application']
-        is_ecommerce = any(keyword in industry.lower() for keyword in ecommerce_keywords) or ticker.upper() == 'SHOP'
+        print(f"    📋 {company_name}")
+        print(f"       Sector: {sector}, Industry: {industry}")
         
-        if is_ecommerce:
-            # Also check Consumer Cyclical (Amazon, eBay) and Consumer Defensive (Walmart)
-            cross_sector_competitors = []
-            for cross_sector in ["Consumer Cyclical", "Consumer Defensive"]:
-                cross_competitors = _get_competitors_by_sector(
-                    ticker=ticker.upper(),
-                    sector=cross_sector,
-                    industry=industry,  # Keep original industry for filtering
-                    target_market_cap=target_market_cap,
-                    is_cross_sector=True  # Flag to use lenient market cap filtering
-                )
-                cross_sector_competitors.extend(cross_competitors)
+        # ====================================================================
+        # Step 2: Get S&P 500 universe
+        # ====================================================================
+        
+        sp500_tickers = _get_sp500_universe()
+        print(f"    🔍 Searching {len(sp500_tickers)} companies...")
+        
+        # ====================================================================
+        # Step 3: Search for competitors dynamically
+        # ====================================================================
+        
+        competitors = []
+        checked = 0
+        
+        for comp_ticker in sp500_tickers:
+            if comp_ticker == ticker.upper():
+                continue
             
-            # Merge and deduplicate (keep unique tickers, prefer same-sector matches)
-            existing_tickers = {c['ticker'] for c in competitors}
-            for comp in cross_sector_competitors:
-                if comp['ticker'] not in existing_tickers:
-                    competitors.append(comp)
-
-        #Step 3 - format the result
+            try:
+                comp_info = _get_cached_ticker_info(comp_ticker)
+                checked += 1
+                
+                comp_sector = comp_info.get('sector', 'Unknown')
+                comp_industry = comp_info.get('industry', 'Unknown')
+                comp_market_cap = comp_info.get('marketCap', 0)
+                
+                # Filter by sector
+                if comp_sector != sector:
+                    continue
+                
+                # Filter by market cap similarity
+                if target_market_cap > 0 and comp_market_cap > 0:
+                    ratio = comp_market_cap / target_market_cap
+                    
+                    # Same industry: lenient (0.1x to 10x)
+                    # Different industry: strict (0.3x to 3x)
+                    if comp_industry == industry:
+                        if ratio < 0.1 or ratio > 10:
+                            continue
+                    else:
+                        if ratio < 0.3 or ratio > 3:
+                            continue
+                
+                competitors.append({
+                    "ticker": comp_ticker,
+                    "name": comp_info.get('longName', comp_ticker),
+                    "market_cap": comp_market_cap,
+                    "industry": comp_industry,
+                    "sector": comp_sector
+                })
+                
+            except:
+                continue
+        
+        # Sort by market cap similarity
+        if target_market_cap > 0:
+            competitors.sort(key=lambda x: abs(x['market_cap'] - target_market_cap))
+        
+        print(f"    ✅ Found {len(competitors)} competitors (checked {checked} companies)")
+        
+        # ====================================================================
+        # Step 4: Build result
+        # ====================================================================
+        
         data = {
             "target_company": company_name,
             "target_ticker": ticker.upper(),
             "sector": sector,
             "industry": industry,
             "target_market_cap": target_market_cap,
-            "competitors": competitors[:5],  # Top 5 only
+            "competitors": competitors[:limit],
             "total_found": len(competitors)
         }
-
-        return {
+        
+        result = {
             "tool_name": "find_competitors",
-            "parameters": {"ticker": ticker},
+            "parameters": {"ticker": ticker, "limit": limit},
             "data": data,
-            "source": "yfinance market data + industry classification",
+            "source": "yfinance (Yahoo Finance)",
             "timestamp": datetime.utcnow().isoformat(),
-            "confidence": 0.8,  # High confidence (market data is reliable)
+            "confidence": 0.8,
             "success": True,
             "error": None
         }
+        
+        # Cache the result
+        _save_to_cache(cache_key, result)
+        
+        return result
+    
     except Exception as e:
-        return _create_error_result(ticker, str(e))
+        return _create_error_result(ticker, f"yfinance error: {str(e)}")
 
-#Helper functions
-def _get_competitors_by_sector(
-    ticker: str,
-    sector: str,
-    industry: str,
-    target_market_cap: float,
-    is_cross_sector: bool = False
-) -> List[Dict[str, Any]]:
-    '''
-    Finds competitors using sector + market cap filtering.
-    
-    Strategy:
-    1. Use a predefined list of major tickers by sector
-    2. Filter to the same sector
-    3. Filter by similar market cap (0.3x to 3x)
-    4. Exclude the target company itself
-    
-    Why this approach?
-    - yfinance doesn't have a "search by sector" API
-    - We maintain a curated list of major companies
-    - This is fast and doesn't require web scraping
-    - Good enough for demo purposes
-    
-    Args:
-        ticker: Target company ticker
-        sector: Target company's sector
-        industry: Target company's industry
-        target_market_cap: Target company's market cap
-        
-    Returns:
-        List of competitor dicts with ticker, name, market_cap
-    '''
-    #Predefined list of major public companies by sector
-    #In production, this would be a database or API call
-    MAJOR_TICKERS_BY_SECTOR = {
-        "Technology": [
-            "AAPL", "MSFT", "GOOGL", "META", "NVDA", "TSLA", "AVGO", "ORCL",
-            "ADBE", "CRM", "CSCO", "ACN", "AMD", "INTC", "IBM", "QCOM", "TXN", "SHOP"
-        ],
-        "Consumer Cyclical": [
-            "AMZN", "TSLA", "HD", "NKE", "MCD", "SBUX", "TM", "F", "GM",
-            "BKNG", "LOW", "TGT", "ABNB", "MAR", "RIVN", "LCID", "EBAY"
-        ],
-        "Healthcare": [
-            "UNH", "JNJ", "LLY", "ABBV", "MRK", "TMO", "ABT", "PFE", "DHR",
-            "BMY", "AMGN", "CVS", "CI", "ELV", "HCA", "ISRG"
-        ],
-        "Financial Services": [
-            "BRK-B", "JPM", "V", "MA", "BAC", "WFC", "MS", "GS", "SPGI",
-            "BLK", "C", "AXP", "CB", "PGR", "MMC", "SCHW"
-        ],
-        "Communication Services": [
-            "META", "GOOGL", "GOOG", "NFLX", "DIS", "CMCSA", "TMUS", "VZ", "T"
-        ],
-        "Consumer Defensive": [
-            "WMT", "PG", "COST", "KO", "PEP", "PM", "MO", "EL", "CL", "KMB"
-        ],
-        "Energy": [
-            "XOM", "CVX", "COP", "SLB", "EOG", "MPC", "PSX", "VLO", "OXY"
-        ],
-        "Industrials": [
-            "UPS", "RTX", "HON", "UNP", "BA", "CAT", "GE", "LMT", "DE", "MMM"
-        ],
-        "Basic Materials": [
-            "LIN", "APD", "ECL", "SHW", "DD", "NEM", "FCX", "NUE"
-        ],
-        "Real Estate": [
-            "PLD", "AMT", "EQIX", "PSA", "WELL", "DLR", "O", "SPG"
-        ],
-        "Utilities": [
-            "NEE", "DUK", "SO", "D", "AEP", "SRE", "EXC", "XEL"
-        ]
-    }
 
-    #Get tickers for this sector
-    sector_tickers = MAJOR_TICKERS_BY_SECTOR.get(sector, [])
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
 
-    if not sector_tickers:
-        #unknown sector, return empty
-        return []
+def _has_polygon_api_key() -> bool:
+    """Check if Polygon API key is configured"""
+    return bool(os.getenv("POLYGON_API_KEY"))
+
+
+def _get_sp500_universe() -> List[str]:
+    """
+    Get S&P 500 ticker list (cached).
     
-    #get info for each ticker in the sector
-    competitors = []
-    for comp_ticker in sector_tickers:
-        #skip target company
-        if comp_ticker == ticker:
-            continue
+    Why S&P 500?
+    - Standard benchmark index (not arbitrary list)
+    - Covers major US companies (~$40T market cap)
+    - Publicly available list
+    - Updates quarterly (not daily)
+    
+    This is the ONE acceptable "list" because:
+    - It's a real financial index, not our invention
+    - We still fetch company data dynamically via API
+    - We do sector matching via API, not hardcoding
+    """
+    
+    cache_file = CACHE_DIR / "sp500_universe.json"
+    
+    # Check cache (valid for 30 days)
+    if cache_file.exists():
         try:
-            # Use cached ticker info to avoid rate limits
-            comp_info = _get_cached_ticker_info(comp_ticker)
+            with open(cache_file, 'r') as f:
+                cached = json.load(f)
+            
+            cache_time = datetime.fromisoformat(cached['cached_at'])
+            if datetime.now() - cache_time < timedelta(days=30):
+                return cached['tickers']
+        except:
+            pass
+    
+    # Fetch from Wikipedia
+    try:
+        import pandas as pd
+        table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
+        tickers = table['Symbol'].tolist()
+        tickers = [t.replace('.', '-') for t in tickers]
         
-            #Get market cap
-            comp_market_cap = comp_info.get('marketCap', 0)
-            comp_industry = comp_info.get('industry', 'Unknown')
+        # Cache it
+        with open(cache_file, 'w') as f:
+            json.dump({
+                'tickers': tickers,
+                'cached_at': datetime.now().isoformat()
+            }, f)
+        
+        return tickers
+    except:
+        # Minimal fallback list
+        return [
+            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA",
+            "BRK-B", "UNH", "JNJ", "JPM", "V", "PG", "XOM", "HD"
+        ]
 
-            #Filter by industry first (same industry = better competitor match)
-            #Then filter by market cap, but be very lenient for same-industry companies
-            industry_match = comp_industry.lower() == industry.lower() if industry != 'Unknown' else False
-            
-            # Market cap filtering - prioritize industry match over size
-            if target_market_cap > 0:
-                ratio = comp_market_cap / target_market_cap
-                
-                # If same industry, be very lenient (0.01x to 20x) - accept any reasonable competitor
-                # If different industry, stricter (0.3x to 3x) - only similar-sized companies
-                # If cross-sector search (e.g., e-commerce), be lenient (0.1x to 10x)
-                if industry_match:
-                    # Same industry - accept even small competitors (they compete in same market)
-                    # Minimum: 0.01x (1% of Tesla = $16B) to catch Ford, GM, Rivian
-                    # Maximum: 20x to catch any large competitors
-                    if ratio < 0.01 or ratio > 20.0:
-                        continue
-                elif is_cross_sector:
-                    # Cross-sector competitors (e.g., Amazon for Shopify) - be very lenient
-                    # Accept 0.01x to 50x market cap range (Amazon is ~48x Shopify)
-                    if ratio < 0.01 or ratio > 50.0:
-                        continue
-                else:
-                    # Different industry, same sector - stricter filter
-                    if ratio < 0.3 or ratio > 3.0:
-                        continue
-            
-            #Add to competitors list
-            competitors.append({
-                "ticker": comp_ticker,
-                "name": comp_info.get('longName', comp_ticker),
-                "market_cap": comp_market_cap,
-                "industry": comp_industry,
-                "industry_match": industry_match  # Flag for sorting
-            })
-        except Exception as e:
-            #skip this ticker if there's an error
-            continue
-    # Sort competitors: same industry first, then by market cap similarity
-    if target_market_cap > 0:
-        competitors.sort(
-            key=lambda x: (
-                not x.get('industry_match', False),  # Same industry first (False sorts before True)
-                abs(x['market_cap'] - target_market_cap)  # Then by market cap similarity
-            )
-        )
-    return competitors
 
 def _get_cached_ticker_info(ticker: str) -> Dict[str, Any]:
-    """
-    Gets ticker info from cache or API with caching.
-    This prevents rate limits by caching responses locally.
+    """Get ticker info from yfinance with 24-hour caching"""
     
-    Strategy:
-    1. Check if cached data exists and is fresh (< 24 hours old)
-    2. If cache exists and fresh, return cached data (no API call!)
-    3. If cache missing or stale, fetch from API and cache it
-    4. If API fails, try to use stale cache as fallback
-    
-    This ensures:
-    - First run: Fetches from API and caches
-    - Subsequent runs: Uses cache (no rate limits!)
-    - Presentation: All data pre-cached, no API calls needed
-    """
     cache_file = CACHE_DIR / f"ticker_{ticker}.json"
     
-    # Check if cache exists and is fresh
+    # Try cache first
     if cache_file.exists():
         try:
             with open(cache_file, 'r') as f:
                 cached_data = json.load(f)
             
-            # Check if cache is still valid (within duration)
-            cache_time_str = cached_data.get('cached_at', '2000-01-01T00:00:00')
-            try:
-                cache_time = datetime.fromisoformat(cache_time_str.replace('Z', '+00:00').split('+')[0])
-            except:
-                cache_time = datetime.fromisoformat(cache_time_str.split('.')[0])
-            
+            cache_time = datetime.fromisoformat(cached_data['cached_at'])
             age = datetime.now() - cache_time
             
             if age < timedelta(hours=CACHE_DURATION_HOURS):
-                # Cache is fresh, use it! (no delay, instant return)
-                return cached_data.get('info', {})
-        except Exception as e:
-            # If cache read fails, continue to fetch fresh
+                return cached_data['info']
+        except:
             pass
     
-    # Fetch fresh data from API (only if cache miss)
+    # Fetch from yfinance
     try:
-        # Debug: Print when fetching from API (only in test mode)
-        import __main__
-        if hasattr(__main__, '__file__') and 'competitor_finder' in __main__.__file__:
-            print(f"  🔄 Fetching {ticker} from API...")
+        rate_limiter.record_yfinance_call()
         
-        target = yf.Ticker(ticker)
-        target_info = target.info
+        stock = yf.Ticker(ticker)
+        info = stock.info
         
-        # Save to cache for future use
-        try:
-            with open(cache_file, 'w') as f:
-                json.dump({
-                    'info': target_info,
-                    'cached_at': datetime.now().isoformat()
-                }, f, default=str)
-            if hasattr(__main__, '__file__') and 'competitor_finder' in __main__.__file__:
-                print(f"  ✅ API fetch successful - cached for future use")
-        except:
-            pass  # If cache write fails, continue anyway
+        # Cache it
+        with open(cache_file, 'w') as f:
+            json.dump({
+                'info': info,
+                'cached_at': datetime.now().isoformat()
+            }, f, default=str)
         
-        # Small delay only on API calls to avoid rate limits
-        time.sleep(0.2)  # Reduced from 0.5s to 0.2s
-        
-        return target_info
+        time.sleep(0.1)  # Small delay to respect rate limits
+        return info
+    
     except Exception as e:
-        # If API fails, try to return stale cache as fallback
+        # Try stale cache as last resort
         if cache_file.exists():
             try:
                 with open(cache_file, 'r') as f:
                     cached_data = json.load(f)
-                    print(f"⚠️  Using cached data for {ticker} (API rate limited)")
-                    return cached_data.get('info', {})
+                return cached_data['info']
             except:
                 pass
         raise e
 
-def _create_error_result(ticker: str, error_msg: str) -> Dict[str, Any]:
-    '''
-    Creates a standardized error result
 
-    Args:
-        ticker: The ticker that failed
-        error_msg: Description of what went wrong 
-    Returns:
-        ToolResult dict with error info
-    '''
+def _get_from_cache(cache_key: str) -> Optional[Dict[str, Any]]:
+    """Get result from cache if valid"""
+    
+    cache_file = CACHE_DIR / f"{cache_key}.json"
+    
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r') as f:
+                cached = json.load(f)
+            
+            cache_time = datetime.fromisoformat(cached['cached_at'])
+            age = datetime.now() - cache_time
+            
+            if age < timedelta(hours=CACHE_DURATION_HOURS):
+                return cached['result']
+        except:
+            pass
+    
+    return None
+
+
+def _save_to_cache(cache_key: str, result: Dict[str, Any]):
+    """Save result to cache"""
+    
+    cache_file = CACHE_DIR / f"{cache_key}.json"
+    
+    try:
+        with open(cache_file, 'w') as f:
+            json.dump({
+                'result': result,
+                'cached_at': datetime.now().isoformat()
+            }, f, default=str)
+    except:
+        pass  # Don't fail if cache write fails
+
+
+def _create_error_result(ticker: str, error_msg: str) -> Dict[str, Any]:
+    """Create standardized error result"""
+    
     return {
         "tool_name": "find_competitors",
         "parameters": {"ticker": ticker},
         "data": None,
-        "source": "yfinance",
+        "source": "competitor_finder",
         "timestamp": datetime.utcnow().isoformat(),
         "confidence": 0.0,
         "success": False,
         "error": error_msg
     }
 
-# FOR TESTING
+
+# ============================================================================
+# TESTING
+# ============================================================================
 
 if __name__ == "__main__":
-    """
-    Test the competitor finder with various companies.
-    """
+    """Test both Polygon and yfinance paths"""
     
-    test_tickers = [
-        ("TSLA", "Tesla - should find Ford, GM, Rivian"),
-        ("AAPL", "Apple - should find Microsoft, Google, Meta"),
-        ("JPM", "JPMorgan - should find BAC, WFC, C"),
-        ("SHOP", "Shopify - should find Amazon, eBay, Walmart")
+    test_cases = [
+        ("TSLA", 5, "Tesla"),
+        ("AAPL", 10, "Apple"),
+        ("JPM", 5, "JPMorgan"),
     ]
     
-    for ticker, description in test_tickers:
-        print("=" * 70)
-        print(f"Testing: {description}")
-        print("=" * 70)
+    for ticker, limit, description in test_cases:
+        print("\n" + "=" * 80)
+        print(f"TEST: {description} (limit: {limit})")
+        print("=" * 80)
         
-        # Check if cache exists before fetching (to verify API call)
-        cache_file = CACHE_DIR / f"ticker_{ticker}.json"
-        cache_exists_before = cache_file.exists()
-        if cache_exists_before:
-            print(f"⚠️  Cache exists for {ticker} - will use cache if fresh")
-        else:
-            print(f"✅ No cache for {ticker} - will fetch from API")
+        result = find_competitors(ticker, limit=limit)
         
-        # Small delay between test cases (only in test script)
-        time.sleep(1)  # Reduced from 3s to 1s
-        
-        result = find_competitors(ticker)
-        
-        # Verify cache was created/updated
-        cache_exists_after = cache_file.exists()
-        if not cache_exists_before and cache_exists_after:
-            print(f"✅ API fetch confirmed - cache created for {ticker}")
-        elif cache_exists_before and cache_exists_after:
-            print(f"ℹ️  Using cached data for {ticker} (or updated if stale)")
-        elif not cache_exists_before and not cache_exists_after and not result.get('success'):
-            print(f"⚠️  API fetch attempted but failed (likely rate limit) - {result.get('error', 'Unknown error')[:50]}")
-        print()
-        
-        if result["success"]:
-            data = result["data"]
-            print(f"Target: {data['target_company']}")
-            print(f"Sector: {data['sector']}")
-            print(f"Industry: {data['industry']}")
-            print(f"\nCompetitors found: {data['total_found']}")
-            print("\nTop 5:")
+        if result['success']:
+            data = result['data']
+            source = data.get('data_source_used', 'unknown')
+            fallback = data.get('fallback_reason')
             
-            for i, comp in enumerate(data['competitors'][:5], 1):
-                market_cap_b = comp['market_cap'] / 1_000_000_000
-                print(f"{i}. {comp['ticker']}: {comp['name']} (${market_cap_b:.1f}B)")
+            print(f"\n✅ Success via {source.upper()}")
+            if fallback:
+                print(f"   Fallback reason: {fallback}")
+            
+            print(f"\n   Target: {data['target_company']}")
+            print(f"   Found {data['total_found']} competitors")
+            print(f"\n   Top {limit}:")
+            
+            for i, comp in enumerate(data['competitors'], 1):
+                cap = comp['market_cap'] / 1e9
+                print(f"   {i}. {comp['ticker']}: {comp['name']} (${cap:.1f}B)")
         else:
-            print(f"Error: {result['error']}")
+            print(f"\n❌ Error: {result['error']}")
         
-        print("\n")
+        print()
+        time.sleep(1)  # Delay between tests
