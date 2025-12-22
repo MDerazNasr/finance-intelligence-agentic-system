@@ -207,9 +207,8 @@ def _route_to_tool(
     #Tool 2 - Competitor Finder
     elif tool_name == "find_competitors":
         ticker = parameters.get("ticker", "")
-
+        
         if not ticker:
-            #Missing required parameter
             return ToolResult(
                 tool_name=tool_name,
                 parameters=parameters,
@@ -220,21 +219,11 @@ def _route_to_tool(
                 success=False,
                 error="Missing required parameter: ticker"
             )
-        # Call the actual tool
-        result = find_competitors(ticker)
         
-        # Convert result dict to ToolResult format
-        return ToolResult(
-            tool_name=result.get("tool_name", tool_name),
-            parameters=result.get("parameters", parameters),
-            data=result.get("data"),
-            source=result.get("source", "competitor_finder"),
-            timestamp=result.get("timestamp", ""),
-            confidence=result.get("confidence", 0.0),
-            success=result.get("success", False),
-            error=result.get("error")
-        )
+        # Call the actual tool
+        return find_competitors(ticker)
     # Tool 3: Top Companies Ranker (Phase 2)
+    
     elif tool_name == "get_top_companies":
         # Placeholder until we build this in Phase 2
         execution_log.append("Tool not yet implemented: get_top_companies")
