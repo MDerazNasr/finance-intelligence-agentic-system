@@ -39,6 +39,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from typing import Dict, Any, List
 from agent.state import ToolResult
 from tools.sec_analyzer import get_latest_quarterly_financials
+from tools.competitor_finder import find_competitors
 
 #main function
 def executor_node(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -203,20 +204,35 @@ def _route_to_tool(
         # Call the actual tool
         return get_latest_quarterly_financials(ticker)
     
-    #Tool 2 - Competitor Finder (Phase 2)
+    #Tool 2 - Competitor Finder
     elif tool_name == "find_competitors":
-        #Placeholders until we build this in Phase 2
-        execution_log.append("Tool not yet implemented: find_competitors")
+        ticker = parameters.get("ticker", "")
 
+        if not ticker:
+            #Missing required parameter
+            return ToolResult(
+                tool_name=tool_name,
+                parameters=parameters,
+                data=None,
+                source="executor",
+                timestamp="",
+                confidence=0.0,
+                success=False,
+                error="Missing required parameter: ticker"
+            )
+        # Call the actual tool
+        result = find_competitors(ticker)
+        
+        # Convert result dict to ToolResult format
         return ToolResult(
-            tool_name=tool_name,
-            parameters=parameters,
-            data={"message": "Tool not yet implemented (Phase 2)"},
-            source="placeholder",
-            timestamp="",
-            confidence=0.0,
-            success=False,
-            error="Tool not implemented yet - coming in Phase 2"
+            tool_name=result.get("tool_name", tool_name),
+            parameters=result.get("parameters", parameters),
+            data=result.get("data"),
+            source=result.get("source", "competitor_finder"),
+            timestamp=result.get("timestamp", ""),
+            confidence=result.get("confidence", 0.0),
+            success=result.get("success", False),
+            error=result.get("error")
         )
     # Tool 3: Top Companies Ranker (Phase 2)
     elif tool_name == "get_top_companies":
