@@ -1,0 +1,312 @@
+Form,NewDescription
+1-A POS,Reg A Offering Amendment
+1-A-W,Reg A Offering Withdrawal
+1-E,Small Biz Investment Notice
+1-E AD,Small Biz Sales Material
+1-K,Reg A Annual Report
+1-SA,Reg A Semiannual Report
+1-U,Reg A Current Report
+1-Z,Reg A Offering Termination
+1-Z-W,ABS Distribution Report
+2-E,Annual Report
+10-12B,Amended Annual Report
+10-12G,Quarterly Report
+10-D,Amended Quarterly Report
+10-K,Employee Stock Plan Report
+10-KT,Institutional Investment Report
+10-Q,13F Omitted Info Notice
+10-QT,Large Trader Registration
+11-K,Proposed Sale Notice
+11-KT,Termination of Registration
+13F-CTR,Class Termination
+13F-HR,Class Termination (Section 12g)
+13F-NT,Registration Withdrawal
+13H,NT 10-K
+144,NT 10-Q
+15-12G,NT 20-F
+15-15D,NT NCSR
+15F-12B,NT-NCEN
+15F-12G,NT-NCSR
+15F-15D,Notification of Late Filing
+17HACON,Order of Registration
+17HQCON,Statement of Beneficial Ownership
+18-12B,Statement of Beneficial Ownership
+18-12G,Statement of Beneficial Ownership
+18-K,Notice of Exempt Solicitation
+20-F,Statement of Changes in Beneficial Ownership
+20FR12B,Statement of Changes in Beneficial Ownership
+20FR12G,Institutional Investment Manager Filing
+24F-2NT,Quarterly Report
+25,Amended Quarterly Report
+25-NSE,Annual Report
+3,Order of Exemption
+305B2,Exemption Application
+4,Annual Statement of Changes
+40-6B,Annual Report of Sales
+40-17F1,Statement of Changes
+40-17F2,Notice of Exempt Solicitation
+40-17G,Tender Offer Statement
+40-17GCS,Investment Company Notice
+40-24B2,Annual Report
+40-33,Amended Annual Report
+40-8B25,Quarterly Report
+40-8F-2,Amended Quarterly Report
+40-APP,Investment Company Report
+40-F,Institutional Investment Report
+40FR12B,Exchange Act Report
+40FR12G,Registration Withdrawal
+40-OIP,Registration Statement
+424A,Notice of Omitted Info
+424B1,Sales Material
+424B2,Registration Application
+424B3,Order of Exemption
+424B4,Exemption Application
+424B5,Annual Statement of Changes
+424B7,Annual Report of Sales
+424B8,Statement of Changes
+424H,Notice of Exempt Solicitation
+425,Tender Offer Statement
+424I,Investment Company Notice
+485APOS,Annual Report
+485BPOS,Amended Annual Report
+485BXT,Quarterly Report
+486APOS,Amended Quarterly Report
+486BPOS,Investment Company Report
+486BXT,Institutional Investment Report
+487,Exchange Act Report
+497,Registration Withdrawal
+497AD,Registration Statement
+497H2,Notice of Omitted Info
+497J,Sales Material
+497K,Registration Application
+497VPI,Order of Exemption
+497VPSUB,Exemption Application
+497VPU,Annual Statement of Changes
+5,Annual Report of Sales
+6-K,Statement of Changes
+8-A12B,Notice of Exempt Solicitation
+8-A12G,Tender Offer Statement
+8-K,Investment Company Notice
+8-K12B,Annual Report
+8-K12G3,Amended Annual Report
+8-K15D5,Quarterly Report
+ABS-15G,Amended Quarterly Report
+ABS-EE,Investment Company Report
+ANNLRPT,Institutional Investment Report
+APP WD,Exchange Act Report
+ARS,Registration Withdrawal
+ATS-N,Registration Statement
+ATS-N/CA,Notice of Omitted Info
+ATS-N/MA,Sales Material
+ATS-N/OFA,Registration Application
+ATS-N/UA,Order of Exemption
+ATS-N-C,Exemption Application
+ATS-N-W,Annual Statement of Changes
+AW,Annual Report of Sales
+AW WD,Statement of Changes
+BULK,Notice of Exempt Solicitation
+C,Tender Offer Statement
+C-W,Investment Company Notice
+C/A-W,Annual Report
+C-U,Amended Annual Report
+C-U-W,Quarterly Report
+C-AR,Amended Quarterly Report
+C-AR-W,Investment Company Report
+C-AR/A-W,Institutional Investment Report
+C-TR,Exchange Act Report
+C-TR-W,Registration Withdrawal
+CB,Registration Statement
+CERT,Notice of Omitted Info
+CFPORTAL,Sales Material
+CFPORTAL-W,Registration Application
+CORRESP,Order of Exemption
+D,Exemption Application
+DEF 14A,Annual Statement of Changes
+DEF 14C,Annual Report of Sales
+DEFA14A,Statement of Changes
+DEFA14C,Notice of Exempt Solicitation
+DEFC14A,Tender Offer Statement
+DEFC14C,Investment Company Notice
+DEFM14A,Annual Report
+DEFM14C,Amended Annual Report
+DEFN14A,Quarterly Report
+DEFR14A,Amended Quarterly Report
+DEFR14C,Investment Company Report
+DEL AM,Institutional Investment Report
+DFAN14A,Exchange Act Report
+DFRN14A,Registration Withdrawal
+DOS,Registration Statement
+DOSLTR,Notice of Omitted Info
+DRS,Sales Material
+DRSLTR,Registration Application
+DSTRBRPT,Order of Exemption
+F-1,Exemption Application
+F-10,Annual Statement of Changes
+F-10EF,Annual Report of Sales
+F-10POS,Statement of Changes
+F-1MEF,Notice of Exempt Solicitation
+F-3,Tender Offer Statement
+F-3ASR,Investment Company Notice
+F-3D,Annual Report
+F-3DPOS,Amended Annual Report
+F-3MEF,Quarterly Report
+F-4,Amended Quarterly Report
+F-4MEF,Investment Company Report
+F-6 POS,Institutional Investment Report
+F-6,Exchange Act Report
+F-6EF,Registration Withdrawal
+F-7 POS,Registration Statement
+F-7,Notice of Omitted Info
+F-8 POS,Sales Material
+F-8,Registration Application
+F-80,Order of Exemption
+F-80POS,Exemption Application
+F-N,Annual Statement of Changes
+FWP,Annual Report of Sales
+F-X,Statement of Changes
+IRANNOTICE,Notice of Exempt Solicitation
+MA,Tender Offer Statement
+MA-I,Investment Company Notice
+MA-W,Annual Report
+MODULE,Amended Annual Report
+N-14 8C,Quarterly Report
+N-14,Amended Quarterly Report
+N-14MEF,Investment Company Report
+N-18F1,Institutional Investment Report
+N-1A,Exchange Act Report
+N-2,Registration Withdrawal
+N-2ASR,Registration Statement
+N-2 POSASR,Notice of Omitted Info
+N-23C-2,Sales Material
+N-23C3A,Registration Application
+N-23C3B,Order of Exemption
+N-23C3C,Exemption Application
+N-27D-1,Annual Statement of Changes
+N-2MEF,Annual Report of Sales
+N-3,Statement of Changes
+N-30B-2,Notice of Exempt Solicitation
+N-30D,Tender Offer Statement
+N-4,Investment Company Notice
+N-5,Annual Report
+N-54A,Amended Annual Report
+N-54C,Quarterly Report
+N-6,Amended Quarterly Report
+N-6F,Investment Company Report
+N-8A,Institutional Investment Report
+N-8B-2,Exchange Act Report
+N-8B-3,Registration Withdrawal
+N-8B-4,Registration Statement
+N-8F,Notice of Omitted Info
+N-CEN,Sales Material
+N-CR,Registration Application
+N-CSR,Order of Exemption
+N-CSRS,Exemption Application
+N-MFP2/A,Annual Statement of Changes
+N-MFP3,Annual Report of Sales
+NPORT-EX,Statement of Changes
+NPORT-NP,Notice of Exempt Solicitation
+NPORT-P,Tender Offer Statement
+N-PX,Investment Company Notice
+N-PX CTR,Annual Report
+N-RN,Amended Annual Report
+NRSRO-UPD,Quarterly Report
+NRSRO-CE,Amended Quarterly Report
+NRSRO-FR,Investment Company Report
+NRSRO-WCLS,Institutional Investment Report
+NRSRO-WREG,Exchange Act Report
+NT 10-K,Registration Withdrawal
+NT 10-D,Registration Statement
+NT 10-Q,Notice of Omitted Info
+NT 11-K,Sales Material
+NT 15D2,Registration Application
+NT 20-F,Order of Exemption
+NT-NCEN,Exemption Application
+NT-NCSR,Annual Statement of Changes
+N-VP,Annual Report of Sales
+N-VPFS,Statement of Changes
+POS 8C,Notice of Exempt Solicitation
+POS AM,Tender Offer Statement
+POS AMI,Investment Company Notice
+POSASR,Annual Report
+POS EX,Amended Annual Report
+POS462B,Quarterly Report
+POS462C,Amended Quarterly Report
+PRE 14A,Investment Company Report
+PRE 14C,Institutional Investment Report
+PREC14A,Exchange Act Report
+PREC14C,Registration Withdrawal
+PREM14A,Registration Statement
+PREM14C,Notice of Omitted Info
+PREN14A,Sales Material
+PRER14A,Registration Application
+PRER14C,Order of Exemption
+PRRN14A,Exemption Application
+PX14A6G,Annual Statement of Changes
+PX14A6N,Annual Report of Sales
+QRTLYRPT,Statement of Changes
+RW,Notice of Exempt Solicitation
+RW WD,Tender Offer Statement
+S-1,Investment Company Notice
+S-11,Annual Report
+S-11MEF,Amended Annual Report
+S-1MEF,Quarterly Report
+S-20,Amended Quarterly Report
+S-3,Investment Company Report
+S-3ASR,Institutional Investment Report
+S-3D,Exchange Act Report
+S-3DPOS,Registration Withdrawal
+S-3MEF,Registration Statement
+S-4 POS,Notice of Omitted Info
+S-4,Sales Material
+S-4EF,Registration Application
+S-4MEF,Order of Exemption
+S-6,Exemption Application
+S-8,Annual Statement of Changes
+S-8 POS,Annual Report of Sales
+S-B,Statement of Changes
+S-BMEF,Notice of Exempt Solicitation
+SBSE,Tender Offer Statement
+SBSE-A,Investment Company Notice
+SBSE-BD,Annual Report
+SBSE-C,Amended Annual Report
+SBSE-W,Quarterly Report
+SBSE-DISPUTE NOTICE,Amended Quarterly Report
+SBSE-CCO-RPT,Investment Company Report
+SC 13D,Institutional Investment Report
+SCHEDULE 13D,Exchange Act Report
+SC 13E1,Registration Withdrawal
+SC 13E3,Registration Statement
+SC 13G,Notice of Omitted Info
+SCHEDULE 13G,Sales Material
+SC 14D9,Registration Application
+SC 14F1,Order of Exemption
+SC 14N,Exemption Application
+SC 14N-S,Annual Statement of Changes
+SC TO-C,Annual Report of Sales
+SC TO-I,Statement of Changes
+SC TO-T,Notice of Exempt Solicitation
+SC13E4F,Tender Offer Statement
+SC14D1F,Investment Company Notice
+SC14D9C,Annual Report
+SC14D9F,Amended Annual Report
+SD,Quarterly Report
+SDR,Amended Quarterly Report
+SDR-CCO,Investment Company Report
+SDR-W,Institutional Investment Report
+SF-1,Exchange Act Report
+SF-1MEF,Registration Withdrawal
+SF-3,Registration Statement
+SF-3MEF,Notice of Omitted Info
+SH-ER,Sales Material
+SH-NT,Registration Application
+SP 15D2,Order of Exemption
+SPDSCL,Exemption Application
+SUPPL,Annual Statement of Changes
+T-3,Annual Report of Sales
+T-6,Statement of Changes
+TA-1,Notice of Exempt Solicitation
+TA-2,Tender Offer Statement
+TA-W,Investment Company Notice
+UPLOAD,Annual Report
+UNDER,Amended Annual Report
+X-17A-5,Quarterly Report

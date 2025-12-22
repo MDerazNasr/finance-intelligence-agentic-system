@@ -24,9 +24,17 @@ Real-world use:
 '''
 
 import os
+import json
+import time
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timedelta
+from pathlib import Path
 import yfinance as yf
+
+# Cache configuration
+CACHE_DIR = Path(__file__).parent.parent / ".cache"
+CACHE_DIR.mkdir(exist_ok=True)
+CACHE_DURATION_HOURS = 24  # Cache data for 24 hours
 
 #main function
 def find_competitors(ticker: str) -> Dict[str, Any]:
@@ -65,9 +73,8 @@ def find_competitors(ticker: str) -> Dict[str, Any]:
         # }
     """
     try:
-        #Step 1 - Get target company information
-        target = yf.Ticker(ticker.upper())
-        target_info = target.info
+        #Step 1 - Get target company information (with caching)
+        target_info = _get_cached_ticker_info(ticker.upper())
     
         #Validate we got data
         if not target_info or 'sector' not in target_info:
@@ -200,13 +207,14 @@ def _get_competitors_by_sector(
     
     #get info for each ticker in the sector
     competitors = []
+    import time
     for comp_ticker in sector_tickers:
         #skip target company
         if comp_ticker == ticker:
             continue
         try:
-            comp = yf.Ticker(comp_ticker)
-            comp_info = comp.info
+            # Use cached ticker info to avoid rate limits
+            comp_info = _get_cached_ticker_info(comp_ticker)
         
             #Get market cap
             comp_market_cap = comp_info.get('marketCap', 0)
@@ -233,6 +241,77 @@ def _get_competitors_by_sector(
             key=lambda x: abs(x['market_cap'] - target_market_cap)
         )
     return competitors
+
+def _get_cached_ticker_info(ticker: str) -> Dict[str, Any]:
+    """
+    Gets ticker info from cache or API with caching.
+    This prevents rate limits by caching responses locally.
+    
+    Strategy:
+    1. Check if cached data exists and is fresh (< 24 hours old)
+    2. If cache exists and fresh, return cached data (no API call!)
+    3. If cache missing or stale, fetch from API and cache it
+    4. If API fails, try to use stale cache as fallback
+    
+    This ensures:
+    - First run: Fetches from API and caches
+    - Subsequent runs: Uses cache (no rate limits!)
+    - Presentation: All data pre-cached, no API calls needed
+    """
+    cache_file = CACHE_DIR / f"ticker_{ticker}.json"
+    
+    # Check if cache exists and is fresh
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r') as f:
+                cached_data = json.load(f)
+            
+            # Check if cache is still valid (within duration)
+            cache_time_str = cached_data.get('cached_at', '2000-01-01T00:00:00')
+            try:
+                cache_time = datetime.fromisoformat(cache_time_str.replace('Z', '+00:00').split('+')[0])
+            except:
+                cache_time = datetime.fromisoformat(cache_time_str.split('.')[0])
+            
+            age = datetime.now() - cache_time
+            
+            if age < timedelta(hours=CACHE_DURATION_HOURS):
+                # Cache is fresh, use it!
+                return cached_data.get('info', {})
+        except Exception as e:
+            # If cache read fails, continue to fetch fresh
+            pass
+    
+    # Fetch fresh data from API
+    try:
+        target = yf.Ticker(ticker)
+        target_info = target.info
+        
+        # Save to cache for future use
+        try:
+            with open(cache_file, 'w') as f:
+                json.dump({
+                    'info': target_info,
+                    'cached_at': datetime.now().isoformat()
+                }, f, default=str)
+        except:
+            pass  # If cache write fails, continue anyway
+        
+        # Add delay to avoid rate limits
+        time.sleep(0.5)
+        
+        return target_info
+    except Exception as e:
+        # If API fails, try to return stale cache as fallback
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    cached_data = json.load(f)
+                    print(f"⚠️  Using cached data for {ticker} (API rate limited)")
+                    return cached_data.get('info', {})
+            except:
+                pass
+        raise e
 
 def _create_error_result(ticker: str, error_msg: str) -> Dict[str, Any]:
     '''
@@ -272,6 +351,10 @@ if __name__ == "__main__":
         print("=" * 70)
         print(f"Testing: {description}")
         print("=" * 70)
+        
+        # Add delay to avoid rate limits
+        import time
+        time.sleep(3)  # Wait 3 seconds between requests
         
         result = find_competitors(ticker)
         
