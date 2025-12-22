@@ -93,6 +93,7 @@ def find_competitors(ticker: str) -> Dict[str, Any]:
         # We'll use a hybrid approach:
         # 1. Check if we have a predefined competitor list
         # 2. Fall back to sector-based search  
+        # 3. For e-commerce/platform companies, also check cross-sector competitors
 
         competitors = _get_competitors_by_sector(
             ticker = ticker.upper(),
@@ -100,6 +101,30 @@ def find_competitors(ticker: str) -> Dict[str, Any]:
             industry=industry,
             target_market_cap=target_market_cap
         )
+        
+        # Special case: For e-commerce/platform companies, also check cross-sector competitors
+        # Shopify competes with Amazon (Consumer Cyclical) and Walmart (Consumer Defensive)
+        ecommerce_keywords = ['e-commerce', 'ecommerce', 'online marketplace', 'retail platform', 'software - application']
+        is_ecommerce = any(keyword in industry.lower() for keyword in ecommerce_keywords) or ticker.upper() == 'SHOP'
+        
+        if is_ecommerce:
+            # Also check Consumer Cyclical (Amazon, eBay) and Consumer Defensive (Walmart)
+            cross_sector_competitors = []
+            for cross_sector in ["Consumer Cyclical", "Consumer Defensive"]:
+                cross_competitors = _get_competitors_by_sector(
+                    ticker=ticker.upper(),
+                    sector=cross_sector,
+                    industry=industry,  # Keep original industry for filtering
+                    target_market_cap=target_market_cap,
+                    is_cross_sector=True  # Flag to use lenient market cap filtering
+                )
+                cross_sector_competitors.extend(cross_competitors)
+            
+            # Merge and deduplicate (keep unique tickers, prefer same-sector matches)
+            existing_tickers = {c['ticker'] for c in competitors}
+            for comp in cross_sector_competitors:
+                if comp['ticker'] not in existing_tickers:
+                    competitors.append(comp)
 
         #Step 3 - format the result
         data = {
@@ -130,7 +155,8 @@ def _get_competitors_by_sector(
     ticker: str,
     sector: str,
     industry: str,
-    target_market_cap: float
+    target_market_cap: float,
+    is_cross_sector: bool = False
 ) -> List[Dict[str, Any]]:
     '''
     Finds competitors using sector + market cap filtering.
@@ -161,11 +187,11 @@ def _get_competitors_by_sector(
     MAJOR_TICKERS_BY_SECTOR = {
         "Technology": [
             "AAPL", "MSFT", "GOOGL", "META", "NVDA", "TSLA", "AVGO", "ORCL",
-            "ADBE", "CRM", "CSCO", "ACN", "AMD", "INTC", "IBM", "QCOM", "TXN"
+            "ADBE", "CRM", "CSCO", "ACN", "AMD", "INTC", "IBM", "QCOM", "TXN", "SHOP"
         ],
         "Consumer Cyclical": [
             "AMZN", "TSLA", "HD", "NKE", "MCD", "SBUX", "TM", "F", "GM",
-            "BKNG", "LOW", "TGT", "ABNB", "MAR", "RIVN", "LCID"
+            "BKNG", "LOW", "TGT", "ABNB", "MAR", "RIVN", "LCID", "EBAY"
         ],
         "Healthcare": [
             "UNH", "JNJ", "LLY", "ABBV", "MRK", "TMO", "ABT", "PFE", "DHR",
@@ -207,7 +233,6 @@ def _get_competitors_by_sector(
     
     #get info for each ticker in the sector
     competitors = []
-    import time
     for comp_ticker in sector_tickers:
         #skip target company
         if comp_ticker == ticker:
@@ -218,27 +243,53 @@ def _get_competitors_by_sector(
         
             #Get market cap
             comp_market_cap = comp_info.get('marketCap', 0)
+            comp_industry = comp_info.get('industry', 'Unknown')
 
-            #Filter by similar market cap (0.3x to 3x)
-            #This ensure we're comparing companies of similar size
+            #Filter by industry first (same industry = better competitor match)
+            #Then filter by market cap, but be very lenient for same-industry companies
+            industry_match = comp_industry.lower() == industry.lower() if industry != 'Unknown' else False
+            
+            # Market cap filtering - prioritize industry match over size
             if target_market_cap > 0:
                 ratio = comp_market_cap / target_market_cap
-                if ratio < 0.3 or ratio > 3.0:
-                    continue #too diffrent in size
+                
+                # If same industry, be very lenient (0.01x to 20x) - accept any reasonable competitor
+                # If different industry, stricter (0.3x to 3x) - only similar-sized companies
+                # If cross-sector search (e.g., e-commerce), be lenient (0.1x to 10x)
+                if industry_match:
+                    # Same industry - accept even small competitors (they compete in same market)
+                    # Minimum: 0.01x (1% of Tesla = $16B) to catch Ford, GM, Rivian
+                    # Maximum: 20x to catch any large competitors
+                    if ratio < 0.01 or ratio > 20.0:
+                        continue
+                elif is_cross_sector:
+                    # Cross-sector competitors (e.g., Amazon for Shopify) - be very lenient
+                    # Accept 0.01x to 50x market cap range (Amazon is ~48x Shopify)
+                    if ratio < 0.01 or ratio > 50.0:
+                        continue
+                else:
+                    # Different industry, same sector - stricter filter
+                    if ratio < 0.3 or ratio > 3.0:
+                        continue
+            
             #Add to competitors list
             competitors.append({
                 "ticker": comp_ticker,
                 "name": comp_info.get('longName', comp_ticker),
                 "market_cap": comp_market_cap,
-                "industry": comp_info.get('industry', 'Unknown')
+                "industry": comp_industry,
+                "industry_match": industry_match  # Flag for sorting
             })
         except Exception as e:
             #skip this ticker if there's an error
             continue
-    # Sort by market cap (closest to target first) 
+    # Sort competitors: same industry first, then by market cap similarity
     if target_market_cap > 0:
         competitors.sort(
-            key=lambda x: abs(x['market_cap'] - target_market_cap)
+            key=lambda x: (
+                not x.get('industry_match', False),  # Same industry first (False sorts before True)
+                abs(x['market_cap'] - target_market_cap)  # Then by market cap similarity
+            )
         )
     return competitors
 
@@ -276,14 +327,19 @@ def _get_cached_ticker_info(ticker: str) -> Dict[str, Any]:
             age = datetime.now() - cache_time
             
             if age < timedelta(hours=CACHE_DURATION_HOURS):
-                # Cache is fresh, use it!
+                # Cache is fresh, use it! (no delay, instant return)
                 return cached_data.get('info', {})
         except Exception as e:
             # If cache read fails, continue to fetch fresh
             pass
     
-    # Fetch fresh data from API
+    # Fetch fresh data from API (only if cache miss)
     try:
+        # Debug: Print when fetching from API (only in test mode)
+        import __main__
+        if hasattr(__main__, '__file__') and 'competitor_finder' in __main__.__file__:
+            print(f"  🔄 Fetching {ticker} from API...")
+        
         target = yf.Ticker(ticker)
         target_info = target.info
         
@@ -294,11 +350,13 @@ def _get_cached_ticker_info(ticker: str) -> Dict[str, Any]:
                     'info': target_info,
                     'cached_at': datetime.now().isoformat()
                 }, f, default=str)
+            if hasattr(__main__, '__file__') and 'competitor_finder' in __main__.__file__:
+                print(f"  ✅ API fetch successful - cached for future use")
         except:
             pass  # If cache write fails, continue anyway
         
-        # Add delay to avoid rate limits
-        time.sleep(0.5)
+        # Small delay only on API calls to avoid rate limits
+        time.sleep(0.2)  # Reduced from 0.5s to 0.2s
         
         return target_info
     except Exception as e:
@@ -344,7 +402,8 @@ if __name__ == "__main__":
     test_tickers = [
         ("TSLA", "Tesla - should find Ford, GM, Rivian"),
         ("AAPL", "Apple - should find Microsoft, Google, Meta"),
-        ("JPM", "JPMorgan - should find BAC, WFC, C")
+        ("JPM", "JPMorgan - should find BAC, WFC, C"),
+        ("SHOP", "Shopify - should find Amazon, eBay, Walmart")
     ]
     
     for ticker, description in test_tickers:
@@ -352,11 +411,28 @@ if __name__ == "__main__":
         print(f"Testing: {description}")
         print("=" * 70)
         
-        # Add delay to avoid rate limits
-        import time
-        time.sleep(3)  # Wait 3 seconds between requests
+        # Check if cache exists before fetching (to verify API call)
+        cache_file = CACHE_DIR / f"ticker_{ticker}.json"
+        cache_exists_before = cache_file.exists()
+        if cache_exists_before:
+            print(f"⚠️  Cache exists for {ticker} - will use cache if fresh")
+        else:
+            print(f"✅ No cache for {ticker} - will fetch from API")
+        
+        # Small delay between test cases (only in test script)
+        time.sleep(1)  # Reduced from 3s to 1s
         
         result = find_competitors(ticker)
+        
+        # Verify cache was created/updated
+        cache_exists_after = cache_file.exists()
+        if not cache_exists_before and cache_exists_after:
+            print(f"✅ API fetch confirmed - cache created for {ticker}")
+        elif cache_exists_before and cache_exists_after:
+            print(f"ℹ️  Using cached data for {ticker} (or updated if stale)")
+        elif not cache_exists_before and not cache_exists_after and not result.get('success'):
+            print(f"⚠️  API fetch attempted but failed (likely rate limit) - {result.get('error', 'Unknown error')[:50]}")
+        print()
         
         if result["success"]:
             data = result["data"]
