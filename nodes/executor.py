@@ -40,6 +40,8 @@ from typing import Dict, Any, List
 from agent.state import ToolResult
 from tools.sec_analyzer import get_latest_quarterly_financials
 from tools.competitor_finder import find_competitors
+from tools.ai_disruption import research_ai_disruption
+from tools.top_companies import get_top_companies
 
 #main function
 def executor_node(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -225,35 +227,40 @@ def _route_to_tool(
     # Tool 3: Top Companies Ranker (Phase 2)
     
     elif tool_name == "get_top_companies":
-        # Placeholder until we build this in Phase 2
-        execution_log.append("Tool not yet implemented: get_top_companies")
+        industry = parameters.get("industry", "")
+        n = parameters.get("n", 10)
         
-        return ToolResult(
-            tool_name=tool_name,
-            parameters=parameters,
-            data={"message": "Tool not yet implemented (Phase 2)"},
-            source="placeholder",
-            timestamp="",
-            confidence=0.0,
-            success=False,
-            error="Tool not implemented yet - coming in Phase 2"
-        )
+        if not industry:
+            result = ToolResult(
+                tool_name=tool_name,
+                parameters=parameters,
+                data=None,
+                source="executor",
+                timestamp="",
+                confidence=0.0,
+                success=False,
+                error="Missing required parameter: industry"
+            )
+        else:
+            result = get_top_companies(industry, n)
     
     # Tool 4: AI Disruption Research (Phase 2)
     elif tool_name == "research_ai_disruption":
-        # Placeholder until we build this in Phase 2
-        execution_log.append("Tool not yet implemented: research_ai_disruption")
+        industry = parameters.get("industry", "")
         
-        return ToolResult(
-            tool_name=tool_name,
-            parameters=parameters,
-            data={"message": "Tool not yet implemented (Phase 2)"},
-            source="placeholder",
-            timestamp="",
-            confidence=0.0,
-            success=False,
-            error="Tool not implemented yet - coming in Phase 2"
-        )
+        if not industry:
+            result = ToolResult(
+                tool_name=tool_name,
+                parameters=parameters,
+                data=None,
+                source="executor",
+                timestamp="",
+                confidence=0.0,
+                success=False,
+                error="Missing required parameter: industry"
+            )
+        else:
+            result = research_ai_disruption(industry)
     
     # Tool 5: General Research (Fallback) (Phase 2)
     elif tool_name == "general_financial_research":

@@ -13,10 +13,20 @@ PROJECT_ROOT = THIS_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from typing import Optional
+from typing import Optional, TypedDict
 from datetime import datetime
 from edgar import Company, set_identity
-from agent.state import ToolResult
+
+# Local ToolResult definition to avoid circular import with agent.state
+class ToolResult(TypedDict):
+    tool_name: str
+    parameters: dict
+    data: Optional[dict]
+    source: str
+    timestamp: str
+    confidence: float
+    success: bool
+    error: Optional[str]
 
 
 def initialize_sec_access():

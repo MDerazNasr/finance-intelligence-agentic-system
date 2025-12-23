@@ -33,6 +33,14 @@ def _lazy_import_generate_research():
     from tools.generate_research import general_financial_research
     return general_financial_research
 
+def _lazy_import_top_companies():
+    from tools.top_companies import get_top_companies
+    return get_top_companies
+
+def _lazy_import_ai_disruption():
+    from tools.ai_disruption import research_ai_disruption
+    return research_ai_disruption
+
 # Use __getattr__ for lazy loading (Python 3.7+)
 def __getattr__(name: str):
     if name == "get_latest_quarterly_financials":
@@ -41,10 +49,16 @@ def __getattr__(name: str):
         return _lazy_import_competitor_finder()
     elif name == "general_financial_research":
         return _lazy_import_generate_research()
+    elif name == "get_top_companies":
+        return _lazy_import_top_companies
+    elif name == "research_ai_disruption":
+        return _lazy_import_ai_disruption
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "get_latest_quarterly_financials", 
     "general_financial_research",
-    "find_competitors"
+    "find_competitors",
+    "top_companies",
+    "ai_disruption"
     ]

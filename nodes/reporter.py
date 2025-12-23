@@ -242,31 +242,52 @@ def _format_successful_result(result: Dict[str, Any]) -> str:
             market_cap = comp.get("market_cap", 0)
             formatted_cap = _format_currency(market_cap)
             output.append(f"- **{ticker}:** {name} (Market Cap: {formatted_cap})")    
-            
+
     elif tool_name == "get_top_companies" and data:
-        # Format top companies data (Phase 2)
-        companies = data.get("companies", [])
-        output.append(f"\n**Top {len(companies)} Companies:**")
+        output.append(f"**Industry:** {data['industry_query']}")
+        output.append(f"**Sector:** {data['sector']}")
+        output.append(f"**Data Source:** {data.get('data_source_used', 'unknown').title()}")
+        output.append(f"\n**Top {len(data['companies'])} by Market Cap:**")
         
-        for i, comp in enumerate(companies, 1):
-            ticker = comp.get("ticker", "")
-            name = comp.get("name", "")
-            market_cap = comp.get("market_cap", 0)
-            formatted_cap = _format_currency(market_cap)
-            output.append(f"{i}. **{ticker}** - {name} (Market Cap: {formatted_cap})")
+        for company in data['companies']:
+            cap_b = company['market_cap'] / 1_000_000_000
+            output.append(f"{company.get('rank', '?')}. **{company['ticker']}**: {company['name']} (${cap_b:.1f}B)")
     
     elif tool_name == "research_ai_disruption" and data:
-        # Format AI disruption research (Phase 2)
-        summary = data.get("summary", "")
-        use_cases = data.get("use_cases", [])
+        output.append(f"**Industry:** {result['parameters']['industry']}")
         
-        output.append(f"\n**AI Disruption Analysis:**")
-        output.append(summary)
+        # Summary
+        summary = data.get('summary', '')
+        if summary:
+            output.append(f"\n**Overview:**")
+            output.append(summary)
         
+        # Use cases
+        use_cases = data.get('use_cases', [])
         if use_cases:
-            output.append(f"\n**Key Use Cases:**")
-            for uc in use_cases[:5]:
-                output.append(f"- {uc}")
+            output.append(f"\n**AI Use Cases ({len(use_cases)}):**")
+            for i, uc in enumerate(use_cases, 1):
+                output.append(f"{i}. {uc}")
+        
+        # Examples
+        examples = data.get('examples', [])
+        if examples:
+            output.append(f"\n**Real-World Examples:**")
+            for ex in examples[:5]:  # Limit to 5
+                company = ex.get('company', 'Unknown')
+                application = ex.get('application', '')
+                output.append(f"- **{company}**: {application}")
+        
+        # Sources
+        sources = data.get('sources', [])
+        if sources:
+            output.append(f"\n**Sources ({len(sources)}):**")
+            for src in sources[:3]:  # Show top 3
+                title = src.get('title', 'Unknown')
+                url = src.get('url', '')
+                output.append(f"- [{title}]({url})")
+        
+        output.append(f"\n**Confidence:** {result['confidence']:.0%} (Research/Synthesis)")
     
     elif tool_name == "general_financial_research" and data:
         # Format general research (Phase 2)
@@ -281,7 +302,6 @@ def _format_successful_result(result: Dict[str, Any]) -> str:
                 title = src.get("title", "")
                 url = src.get("url", "")
                 output.append(f"- [{title}]({url})")
-    
     else:
         # Generic fallback for unknown tool types
         output.append(f"\n**Data:** {data}")

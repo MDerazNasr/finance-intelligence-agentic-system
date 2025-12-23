@@ -71,23 +71,81 @@ INDUSTRY_TO_SECTOR = {
     "technology": "Technology",
     "tech": "Technology",
     "software": "Technology",
-    
+    "hardware": "Technology",
+    "semiconductors": "Technology",
+    "it": "Technology",
+
     # Healthcare
     "healthcare": "Healthcare",
     "health": "Healthcare",
     "pharma": "Healthcare",
-    
-    # Financial Services
+    "biotech": "Healthcare",
+    "medical": "Healthcare",
+
+    # Financials
     "finance": "Financial Services",
     "financial": "Financial Services",
     "banking": "Financial Services",
-    
-    # Consumer Cyclical
+    "banks": "Financial Services",
+    "insurance": "Financial Services",
+    "fintech": "Financial Services",
+
+    # Consumer Discretionary (Cyclical)
+    "consumer cyclical": "Consumer Cyclical",
     "retail": "Consumer Cyclical",
     "automotive": "Consumer Cyclical",
     "auto": "Consumer Cyclical",
-    
-    # ... add more as needed
+    "e-commerce": "Consumer Cyclical",
+    "apparel": "Consumer Cyclical",
+    "hotels": "Consumer Cyclical",
+
+    # Consumer Staples (Defensive)
+    "consumer defensive": "Consumer Defensive",
+    "staples": "Consumer Defensive",
+    "food": "Consumer Defensive",
+    "beverages": "Consumer Defensive",
+    "tobacco": "Consumer Defensive",
+    "household products": "Consumer Defensive",
+
+    # Communication Services
+    "communication": "Communication Services",
+    "telecom": "Communication Services",
+    "media": "Communication Services",
+    "entertainment": "Communication Services",
+    "social media": "Communication Services",
+
+    # Energy
+    "energy": "Energy",
+    "oil": "Energy",
+    "gas": "Energy",
+    "drilling": "Energy",
+    "renewables": "Energy",
+
+    # Industrials
+    "industrials": "Industrials",
+    "aerospace": "Industrials",
+    "defense": "Industrials",
+    "manufacturing": "Industrials",
+    "transportation": "Industrials",
+    "logistics": "Industrials",
+
+    # Materials
+    "materials": "Materials",
+    "mining": "Materials",
+    "chemicals": "Materials",
+    "steel": "Materials",
+    "lumber": "Materials",
+
+    # Real Estate
+    "real estate": "Real Estate",
+    "reit": "Real Estate",
+    "property": "Real Estate",
+
+    # Utilities
+    "utilities": "Utilities",
+    "electric": "Utilities",
+    "water": "Utilities",
+    "power": "Utilities"
 }
 
 
@@ -181,11 +239,12 @@ def _fetch_from_polygon(industry: str, sector: str, n: int) -> Dict[str, Any]:
             yfinance for sector classification
     '''
 
-    api_key = os.getenv("POLYOGON_API_KEY")
+    api_key = os.getenv("POLYGON_API_KEY")
 
     try:
-        #option A - get SNP 500 list via Poly.
+        #option A - get S&P 500 list (cached)
         print(f"Getting S&P 500 universe...")
+        sp500_tickers = _get_sp500_universe()
 
         #Verify each via Polygon to ensure they're valid
         companies = []
@@ -213,21 +272,21 @@ def _fetch_from_polygon(industry: str, sector: str, n: int) -> Dict[str, Any]:
             except:
                 continue
 
-            #Sort by market cap
-            companies.sort(key=lambda x: x['market_cap'], reverse=True)
+        #Sort by market cap
+        companies.sort(key=lambda x: x['market_cap'], reverse=True)
 
-            #Return top N
-            return {
-                'success': True,
-                'data': {
-                    'industry_query': industry,
-                    'sector': sector,
-                    'companies': companies[:n],
-                    'total_in_sector': len(companies)
-                },
-                'source': 'Polygon.io + yfinance',
-                'confidence': 0.85
-            }
+        #Return top N
+        return {
+            'success': True,
+            'data': {
+                'industry_query': industry,
+                'sector': sector,
+                'companies': companies[:n],
+                'total_in_sector': len(companies)
+            },
+            'source': 'Polygon.io + yfinance',
+            'confidence': 0.85
+        }
     except Exception as e:
         return {
             'success': False,
