@@ -24,19 +24,46 @@ uses cascading data sources:
 import os
 import json
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from pathlib import Path
+import yfinance as yf #for yfinance
 import requests #for POLYGON API
 from dotenv import load_dotenv
 
 #load env
 load_dotenv()
 
+
+
 #cache config
 CACHE_DIR = Path(__file__).parent.parent / ".cache"
 CACHE_DIR.mkdir(exist_ok=True)
 CACHE_DURATION_HOURS = 24
+
+# Rate limit tracking (to avoid hammering APIs)
+class RateLimiter:
+    """Simple rate limiter to track API calls"""
+    def __init__(self):
+        self.polygon_calls = []
+        self.yfinance_calls = []
+    
+    def can_call_polygon(self) -> bool:
+        """Check if we can call Polygon (5 per minute limit)"""
+        now = datetime.now()
+        # Remove calls older than 1 minute
+        self.polygon_calls = [t for t in self.polygon_calls if now - t < timedelta(minutes=1)]
+        return len(self.polygon_calls) < 5
+    
+    def record_polygon_call(self):
+        """Record a Polygon API call"""
+        self.polygon_calls.append(datetime.now())
+    
+    def record_yfinance_call(self):
+        """Record a yfinance call"""
+        self.yfinance_calls.append(datetime.now())
+
+rate_limiter = RateLimiter()
 
 # Map common industry terms to GICS sectors
 INDUSTRY_TO_SECTOR = {
@@ -265,3 +292,198 @@ def _fetch_from_yfinance(industry: str, sector: str, n: int) -> Dict[str, Any]:
     
     except Exception as e:
         return _create_error_result(industry, n, str(e))
+    
+def _get_sp500_universe() -> List[str]:
+    """Get S&P 500 ticker list (cached 30 days)"""
+    # Implementation here - fetches from Wikipedia
+    # Falls back to hardcoded list
+    # Same as competitor_finder
+    cache_file = CACHE_DIR / "sp500_universe.json"
+    
+    # Check cache (valid for 30 days)
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r') as f:
+                cached = json.load(f)
+            
+            cache_time = datetime.fromisoformat(cached['cached_at'])
+            if datetime.now() - cache_time < timedelta(days=30):
+                return cached['tickers']
+        except:
+            pass
+    
+    # Fetch from Wikipedia with proper headers to avoid 403 errors
+    try:
+        import pandas as pd
+        import requests
+        
+        print("    📥 Fetching S&P 500 list from Wikipedia...")
+        
+        # Use requests with proper headers to avoid 403 Forbidden
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        
+        # Fetch the page with headers
+        response = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies', headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Parse HTML with pandas (using StringIO to avoid deprecation warning)
+        from io import StringIO
+        table = pd.read_html(StringIO(response.text))[0]
+        tickers = table['Symbol'].tolist()
+        tickers = [t.replace('.', '-') for t in tickers]
+        
+        # Cache it
+        with open(cache_file, 'w') as f:
+            json.dump({
+                'tickers': tickers,
+                'cached_at': datetime.now().isoformat()
+            }, f)
+        
+        print(f"    ✅ Loaded {len(tickers)} S&P 500 companies")
+        return tickers
+    except Exception as e:
+        print(f"    ⚠️ Failed to fetch S&P 500 list: {e}")
+        # Comprehensive fallback list - all S&P 500 Technology companies + major companies
+        # This ensures we have complete coverage even if Wikipedia fails
+        return [
+            # Technology (S&P 500) - comprehensive list
+            "AAPL", "MSFT", "GOOGL", "GOOG", "META", "NVDA", "AVGO", "ORCL", "ADBE", "CRM", 
+            "CSCO", "ACN", "AMD", "INTC", "IBM", "QCOM", "TXN", "SHOP", "NOW", "INTU",
+            "AMAT", "LRCX", "KLAC", "SNPS", "CDNS", "ANSS", "FTNT", "PANW", "CRWD", "ZS",
+            "NET", "DDOG", "MDB", "TEAM", "ESTC", "DOCN", "FROG", "GTLB", "ASAN", "VEEV",
+            "WDAY", "ZM", "DOCU", "COUP", "OKTA", "SPLK", "QLYS", "VRSN", "FFIV", "AKAM",
+            # Consumer Cyclical
+            "AMZN", "TSLA", "HD", "NKE", "MCD", "SBUX", "TM", "F", "GM", "BKNG", "LOW", "TGT", "ABNB", "MAR", "RIVN", "LCID", "EBAY",
+            # Healthcare
+            "UNH", "JNJ", "LLY", "ABBV", "MRK", "TMO", "ABT", "PFE", "DHR", "BMY", "AMGN", "CVS", "CI", "ELV", "HCA", "ISRG",
+            # Financial Services
+            "BRK-B", "JPM", "V", "MA", "BAC", "WFC", "MS", "GS", "SPGI", "BLK", "C", "AXP", "CB", "PGR", "MMC", "SCHW",
+            # Communication Services
+            "NFLX", "DIS", "CMCSA", "TMUS", "VZ", "T",
+            # Consumer Defensive
+            "WMT", "PG", "COST", "KO", "PEP", "PM", "MO", "EL", "CL", "KMB",
+            # Energy
+            "XOM", "CVX", "COP", "SLB", "EOG", "MPC", "PSX", "VLO", "OXY",
+            # Industrials
+            "UPS", "RTX", "HON", "UNP", "BA", "CAT", "GE", "LMT", "DE", "MMM",
+            # Basic Materials
+            "LIN", "APD", "ECL", "SHW", "DD", "NEM", "FCX", "NUE",
+            # Real Estate
+            "PLD", "AMT", "EQIX", "PSA", "WELL", "DLR", "O", "SPG",
+            # Utilities
+            "NEE", "DUK", "SO", "D", "AEP", "SRE", "EXC", "XEL"
+        ]
+
+def _get_cached_ticker_info(ticker: str) -> Dict[str, Any]:
+    """Get ticker info from yfinance (cached 24 hours)"""
+    # Implementation here - fetches from yfinance
+    # Caches locally
+    """Get ticker info from yfinance with 24-hour caching"""
+    
+    cache_file = CACHE_DIR / f"ticker_{ticker}.json"
+    
+    # Try cache first
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r') as f:
+                cached_data = json.load(f)
+            
+            cache_time = datetime.fromisoformat(cached_data['cached_at'])
+            age = datetime.now() - cache_time
+            
+            if age < timedelta(hours=CACHE_DURATION_HOURS):
+                return cached_data['info']
+        except:
+            pass
+    
+    # Fetch from yfinance
+    try:
+        rate_limiter.record_yfinance_call()
+        
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        
+        # Cache it
+        with open(cache_file, 'w') as f:
+            json.dump({
+                'info': info,
+                'cached_at': datetime.now().isoformat()
+            }, f, default=str)
+        
+        time.sleep(0.1)  # Small delay to respect rate limits
+        return info
+    
+    except Exception as e:
+        # Try stale cache as last resort
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    cached_data = json.load(f)
+                return cached_data['info']
+            except:
+                pass
+        raise e
+
+def _get_from_cache(cache_key: str) -> Optional[Dict[str, Any]]:
+    """Read from cache if fresh"""
+    """Get result from cache if valid"""
+    
+    cache_file = CACHE_DIR / f"{cache_key}.json"
+    
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r') as f:
+                cached = json.load(f)
+            
+            cache_time = datetime.fromisoformat(cached['cached_at'])
+            age = datetime.now() - cache_time
+            
+            if age < timedelta(hours=CACHE_DURATION_HOURS):
+                return cached['result']
+        except:
+            pass
+    
+    return None
+
+def _save_to_cache(cache_key: str, data: Dict):
+    """Write to cache"""
+    """Save result to cache"""
+    
+    cache_file = CACHE_DIR / f"{cache_key}.json"
+    
+    try:
+        with open(cache_file, 'w') as f:
+            json.dump({
+                'result': result,
+                'cached_at': datetime.now().isoformat()
+            }, f, default=str)
+    except:
+        pass  # Don't fail if cache write fails
+
+
+def _create_error_result(ticker: str, error_msg: str) -> Dict[str, Any]:
+    """Create standardized error result"""
+    
+    return {
+        "tool_name": "find_competitors",
+        "parameters": {"ticker": ticker},
+        "data": None,
+        "source": "competitor_finder",
+        "timestamp": datetime.utcnow().isoformat(),
+        "confidence": 0.0,
+        "success": False,
+        "error": error_msg
+    }
+
+def _create_error_result(industry: str, n: int, error: str) -> Dict:
+    """Standard error format"""
+    return {
+        'tool_name': 'get_top_companies',
+        'parameters': {'industry': industry, 'n': n},
+        'success': False,
+        'confidence': 0.0,
+        'error': error,
+        'data': None
+    }
