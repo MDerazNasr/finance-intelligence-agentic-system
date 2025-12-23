@@ -19,7 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Set page config (MUST be first Streamlit command)
 st.set_page_config(
     page_title="Sagard Financial Analyst",
-    page_icon="🤖",
+    page_icon=None,
     layout="wide",  # Use full width
     initial_sidebar_state="expanded"
 )
@@ -47,7 +47,7 @@ def setup_environment():
             missing_keys.append(f"- {key}: {help_text}")
     
     if missing_keys:
-        st.error("⚠️ Missing required environment variables:")
+        st.error("Missing required environment variables:")
         for msg in missing_keys:
             st.write(msg)
         st.info("Add these to your .env file")
@@ -65,21 +65,21 @@ except ImportError as e:
     st.stop()
 
 # Page header
-st.title("🤖 Financial Analyst Agent")
+st.title("Financial Analyst Agent")
 st.markdown("""
 Powered by **Gemini 2.0 Flash** with multi-source data integration.
 
 This agent can:
-- 📊 Analyze SEC filings (10-Q/10-K)
-- 🏢 Find company competitors
-- 📈 Rank top companies by market cap
-- 🤖 Research AI disruption trends
+- Analyze SEC filings (10-Q/10-K)
+- Find company competitors
+- Rank top companies by market cap
+- Research AI disruption trends
 """)
 
 st.divider()
 # Sidebar configuration
 with st.sidebar:
-    st.header("📚 Example Queries")
+    st.header("Example Queries")
     st.markdown("Click any example to run it:")
     
     # Example queries organized by tool
@@ -117,7 +117,7 @@ with st.sidebar:
     st.divider()
     
     # Info section
-    st.subheader("ℹ️ About")
+    st.subheader("About")
     st.markdown("""
     **Tools:**
     - SEC Analyzer (Confidence: 1.0)
@@ -131,7 +131,7 @@ with st.sidebar:
     - Web search + LLM synthesis
     """)
 # Main query input
-st.header("💬 Ask a Question")
+st.header("Ask a Question")
 
 # Initialize session state for query
 if 'query' not in st.session_state:
@@ -158,7 +158,7 @@ if analyze_button and query:
     st.divider()
     
     # Show loading spinner
-    with st.spinner("🤖 Agent is thinking..."):
+    with st.spinner("Agent is thinking..."):
         try:
             # Time the execution
             start_time = datetime.now()
@@ -182,7 +182,7 @@ if analyze_button and query:
 if 'result' in st.session_state:
     result = st.session_state.result
     
-    st.header("📊 Analysis Results")
+    st.header("Analysis Results")
     
     # Metrics row
     col1, col2, col3, col4 = st.columns(4)
@@ -227,7 +227,7 @@ if 'result' in st.session_state:
     st.divider()
 
 # Main answer display
-    st.subheader("💡 Answer")
+    st.subheader("Answer")
     
     answer = result.get('answer', 'No answer generated')
     
@@ -236,7 +236,7 @@ if 'result' in st.session_state:
     
     st.divider()
 # Tool execution details
-    st.subheader("🔧 Tool Execution")
+    st.subheader("Tool Execution")
     
     tool_results = result.get('tool_results', [])
     
@@ -269,7 +269,7 @@ if 'result' in st.session_state:
     else:
         st.info("No tools were executed")
 # Execution log
-    with st.expander("📝 Execution Log"):
+    with st.expander("Execution Log"):
         execution_log = result.get('execution_log', [])
         
         if execution_log:
@@ -297,7 +297,7 @@ st.markdown("""
 
 ---
 
-## 🎨 Complete File Structure
+## Complete File Structure
 
 Your `app.py` should now have:
 ```

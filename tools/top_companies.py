@@ -34,6 +34,9 @@ from dotenv import load_dotenv
 #load env
 load_dotenv()
 
+# Demo flag: force yfinance-only (skip Polygon) for speed/offline demos
+DEMO_YFINANCE_ONLY = os.getenv("DEMO_YFINANCE_ONLY", "").lower() == "true"
+
 
 
 #cache config
@@ -183,10 +186,10 @@ def get_top_companies(industry: str, n: int = 10) -> Dict[str, Any]:
             industry, n,
             f"Unknown industry: '{industry}'. Try: technology, healthcare, finance, etc."
         )
-    #Try Polygon (primary)
+    #Try Polygon (primary) unless demo flag forces yfinance
     polygon_api_key = os.getenv("POLYGON_API_KEY")
 
-    if polygon_api_key:
+    if polygon_api_key and not DEMO_YFINANCE_ONLY:
         try:
             print(f"Trying Polygon.io")
             result = _fetch_from_polygon(industry, sector, n)
@@ -208,6 +211,9 @@ def get_top_companies(industry: str, n: int = 10) -> Dict[str, Any]:
         
         except Exception as e:
             print(f"Polygon error: {str(e)}")
+    else:
+        if DEMO_YFINANCE_ONLY:
+            print("Polygon skipped (DEMO_YFINANCE_ONLY=true); using yfinance")
     
     #Step 4 - Fall back to yfinance
     print(f"Falling back to yfinance")

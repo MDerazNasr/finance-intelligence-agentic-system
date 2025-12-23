@@ -77,10 +77,10 @@ def reporter_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     #Check if we have any results
     if not tool_results:
-        answer_parts.append("\n⚠️ No data was retrieved. Please try a different query.\n")
+        answer_parts.append("\nNo data was retrieved. Please try a different query.\n")
         execution_log.append("No tool results to report")    
     else:
-        execution_log.append(f"   📝 Formatting {len(tool_results)} result(s)")
+        execution_log.append(f"   Formatting {len(tool_results)} result(s)")
 
         #Format each tool result
         for i, result in enumerate(tool_results, 1):
@@ -190,10 +190,9 @@ def _format_successful_result(result: Dict[str, Any]) -> str:
 
     #Start with the confidence indicator
     confidence = result["confidence"]
-    confidence_emoji = _get_confidence_emoji(confidence)
 
     output = []
-    output.append(f"\n**Confidence:** {confidence:.0%} {confidence_emoji}")
+    output.append(f"\n**Confidence:** {confidence:.0%}")
     output.append(f"**Source:** {result['source']}")
 
     #Format based on tool type
@@ -247,11 +246,21 @@ def _format_successful_result(result: Dict[str, Any]) -> str:
         output.append(f"**Industry:** {data['industry_query']}")
         output.append(f"**Sector:** {data['sector']}")
         output.append(f"**Data Source:** {data.get('data_source_used', 'unknown').title()}")
-        output.append(f"\n**Top {len(data['companies'])} by Market Cap:**")
+        companies = data.get('companies', [])
+        # Sort defensively by market cap descending
+        companies = sorted(
+            companies,
+            key=lambda c: c.get('market_cap', 0),
+            reverse=True
+        )
+        top_n = min(len(companies), len(data.get('companies', [])))
+        output.append(f"\n**Top {top_n} by Market Cap:**")
         
-        for company in data['companies']:
-            cap_b = company['market_cap'] / 1_000_000_000
-            output.append(f"{company.get('rank', '?')}. **{company['ticker']}**: {company['name']} (${cap_b:.1f}B)")
+        for i, company in enumerate(companies[:top_n], 1):
+            cap_b = company.get('market_cap', 0) / 1_000_000_000
+            name = company.get('name', 'Unknown')
+            ticker = company.get('ticker', '?')
+            output.append(f"- {i}. **{ticker}**: {name} (${cap_b:.1f}B)")
     
     elif tool_name == "research_ai_disruption" and data:
         output.append(f"**Industry:** {result['parameters']['industry'].title()}")
@@ -282,7 +291,7 @@ def _format_successful_result(result: Dict[str, Any]) -> str:
         sources = data.get('sources', [])
         if sources:
             output.append(f"\n<details>")
-            output.append(f"<summary><b>📚 View Sources ({len(sources)} articles)</b></summary>")
+            output.append(f"<summary><b>View Sources ({len(sources)} articles)</b></summary>")
             output.append(f"\n")
             for i, src in enumerate(sources, 1):
                 title = src.get('title', 'Unknown')
@@ -349,30 +358,8 @@ def _format_failed_result(result: Dict[str, Any]) -> str:
 
 #Helper Functions
 def _get_confidence_emoji(confidence: float) -> str:
-    '''
-    Returns an emoji based on confidence level.
-
-    This is a visual indicator of data quality:
-    - 🟢 High confidence (0.8-1.0): Official, audited data
-    - 🟡 Medium confidence (0.5-0.8): Reliable but derived
-    - 🟠 Low confidence (0.3-0.5): Best effort, might be outdated
-    - 🔴 Very low confidence (0.0-0.3): Unreliable
-    
-    Args:
-        confidence: Float between 0.0 and 1.0
-        
-    Returns:
-        Emoji string    
-    '''
-
-    if confidence >= 0.8:
-        return "🟢"  # Green - High confidence
-    elif confidence >= 0.5:
-        return "🟡"  # Yellow - Medium confidence
-    elif confidence >= 0.3:
-        return "🟠"  # Orange - Low confidence
-    else:
-        return "🔴"  # Red - Very low confidence
+    """Deprecated: return empty string (no emoji)."""
+    return ""
     
 def _format_currency(amount: float) -> str:
     """

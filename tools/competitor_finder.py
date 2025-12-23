@@ -43,6 +43,12 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+# Demo flag: force yfinance-only (skip Polygon) for speed/offline demos
+DEMO_YFINANCE_ONLY = os.getenv("DEMO_YFINANCE_ONLY", "").lower() == "true"
+
+# Manual hardcoded cache flag (use supplied competitor lists, skip APIs)
+USE_MANUAL_COMPETITOR_CACHE = os.getenv("USE_MANUAL_COMPETITOR_CACHE", "").lower() == "true"
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -74,6 +80,66 @@ class RateLimiter:
         self.yfinance_calls.append(datetime.now())
 
 rate_limiter = RateLimiter()
+
+# Manual competitor data for demo/offline use (market caps approximate)
+MANUAL_COMPETITOR_DATA = {
+    # Technology / E-commerce / Cloud
+    "AAPL": [
+        ("NVDA", "NVIDIA", 4_470_000_000_000),
+        ("MSFT", "Microsoft", 3_600_000_000_000),
+        ("META", "Meta Platforms", 1_670_000_000_000),
+        ("AVGO", "Broadcom", 1_620_000_000_000),
+        ("TSM", "TSMC", 1_520_000_000_000),
+        ("TCEHY", "Tencent", 713_000_000_000),
+        ("ORCL", "Oracle", 570_000_000_000),
+        ("SSNLF", "Samsung", 504_000_000_000),
+        ("BABA", "Alibaba", 360_000_000_000),
+        ("SAP", "SAP", 286_000_000_000),
+        ("CRM", "Salesforce", 248_000_000_000),
+        ("ADBE", "Adobe", 220_000_000_000),
+        ("NFLX", "Netflix", 395_000_000_000),
+        ("CSCO", "Cisco", 308_000_000_000),
+        ("MELI", "MercadoLibre", 105_000_000_000),
+    ],
+    "GOOGL": [],
+    "AMZN": [],
+    "SHOP": [],
+
+    # Automotive & Energy
+    "TSLA": [
+        ("TM", "Toyota", 286_000_000_000),
+        ("BYDDY", "BYD", 110_000_000_000),
+        ("POAHY", "Porsche", 75_000_000_000),
+        ("DDAIF", "Mercedes-Benz", 72_000_000_000),
+        ("VWAGY", "Volkswagen", 55_000_000_000),
+    ],
+    "F": [],
+
+    # Professional Services (Consulting & Audit)
+    "ACN": [
+        ("Deloitte", "Deloitte", 0),
+        ("PwC", "PwC", 0),
+        ("EY", "EY", 0),
+        ("IBM", "IBM (Consulting)", 283_000_000_000),
+        ("INFY", "Infosys", 85_000_000_000),
+        ("TCS", "TCS", 165_000_000_000),
+        ("McKinsey", "McKinsey & Co.", 0),
+        ("BCG", "BCG", 0),
+    ],
+
+    # Private Equity & Venture
+    "BX": [
+        ("BX", "Blackstone", 215_000_000_000),
+        ("KKR", "KKR", 135_000_000_000),
+        ("APO", "Apollo Global", 95_000_000_000),
+        ("CG", "Carlyle Group", 18_000_000_000),
+    ],
+}
+# reuse lists
+for t in ["GOOGL", "AMZN", "SHOP"]:
+    MANUAL_COMPETITOR_DATA[t] = MANUAL_COMPETITOR_DATA["AAPL"]
+for t in ["F"]:
+    MANUAL_COMPETITOR_DATA[t] = MANUAL_COMPETITOR_DATA["TSLA"]
 
 
 # ============================================================================
@@ -132,10 +198,44 @@ def find_competitors(ticker: str, limit: int = 5) -> Dict[str, Any]:
     result = None
     
     # ========================================================================
-    # STEP 1: Try Polygon.io (Primary Source)
+    # STEP 1: Manual hardcoded cache (for demo/offline), else Polygon.io
     # ========================================================================
-    
-    if _has_polygon_api_key():
+    if USE_MANUAL_COMPETITOR_CACHE:
+        manual = MANUAL_COMPETITOR_DATA.get(ticker.upper())
+        if manual:
+            comps = [
+                {
+                    "ticker": t,
+                    "name": name,
+                    "market_cap": mc,
+                    "industry": "Unknown",
+                    "sector": "Unknown",
+                }
+                for t, name, mc in manual
+            ][:limit]
+            return {
+                "tool_name": "find_competitors",
+                "parameters": {"ticker": ticker, "limit": limit},
+                "data": {
+                    "target_company": ticker.upper(),
+                    "target_ticker": ticker.upper(),
+                    "sector": "Unknown",
+                    "industry": "Unknown",
+                    "target_market_cap": 0,
+                    "competitors": comps,
+                    "total_found": len(comps),
+                    "data_source_used": "manual",
+                    "fallback_reason": "Manual demo cache",
+                },
+                "source": "manual_cache",
+                "timestamp": datetime.utcnow().isoformat(),
+                "confidence": 0.8,
+                "success": True,
+                "error": None,
+            }
+
+    # If not manual, try Polygon unless demo forces yfinance
+    if (not DEMO_YFINANCE_ONLY) and _has_polygon_api_key():
         print("  📊 Attempting Polygon.io (professional API)...")
         
         try:
@@ -500,6 +600,7 @@ def _fetch_from_polygon(ticker: str, limit: int) -> Dict[str, Any]:
         # This ensures we prioritize large companies which are more likely to be competitors
         
         candidates_with_mc = []
+        candidates_no_mc = []
         
         # First pass: Get market cap for all candidates
         # OPTIMIZED: With unlimited API calls, process all candidates for perfect results
@@ -518,6 +619,12 @@ def _fetch_from_polygon(ticker: str, limit: int) -> Dict[str, Any]:
                         'market_cap': comp_market_cap,
                         'info': comp_info
                     })
+                else:
+                    candidates_no_mc.append({
+                        'candidate': candidate,
+                        'market_cap': 0,
+                        'info': comp_info
+                    })
             except:
                 continue
         
@@ -527,8 +634,8 @@ def _fetch_from_polygon(ticker: str, limit: int) -> Dict[str, Any]:
         
         # Second pass: Filter and process sorted candidates
         # OPTIMIZED: Early termination - once we have enough competitors, stop processing
-        # This speeds up processing significantly (stops after finding ~15-20 good candidates)
         max_competitors_to_find = limit * 3  # Find 3x the limit to ensure good results after filtering
+        added_tickers = set()
         
         for item in candidates_with_mc:
             # Early termination: if we already have enough competitors, stop processing
@@ -590,27 +697,20 @@ def _fetch_from_polygon(ticker: str, limit: int) -> Dict[str, Any]:
                     skipped_filter += 1
                     continue  # No sector/industry match, skip
                 
-                # Market cap filtering - very lenient for same sector, moderate for cross-sector
+                # Market cap filtering - lenient; skip ratio checks if target mc unavailable
                 if target_market_cap > 0:
                     if industry_match:
-                        # Same industry: very lenient
                         if ratio < 0.01 or ratio > 50.0:
                             skipped_filter += 1
                             continue
                     elif sector_match:
-                        # Same sector: lenient
                         if ratio < 0.02 or ratio > 30.0:
                             skipped_filter += 1
                             continue
                     elif is_cross_sector:
-                        # Cross-sector competitor: moderate filter (0.3x to 3x for large companies)
-                        # This ensures GOOGL, AMZN, META are included for AAPL
                         if ratio < 0.3 or ratio > 3.0:
                             skipped_filter += 1
                             continue
-                else:
-                    skipped_filter += 1
-                    continue  # No market cap for target, skip
                 
                 # Exclude GOOG (Alphabet Class C) to avoid double counting with GOOGL
                 if comp_ticker == "GOOG":
@@ -626,9 +726,54 @@ def _fetch_from_polygon(ticker: str, limit: int) -> Dict[str, Any]:
                     "sector_match": sector_match,
                     "cross_sector": is_cross_sector
                 })
+                added_tickers.add(comp_ticker)
             except Exception as e:
                 # Silently skip errors to continue processing
                 continue
+
+        # If we still don't have enough, backfill with highest-cap remaining candidates
+        if len(competitors) < limit:
+            print(f"    ⚠️ Only {len(competitors)} after filtering; backfilling to {limit}")
+            for item in candidates_with_mc:
+                if len(competitors) >= limit:
+                    break
+                comp_ticker = item['candidate']['ticker']
+                if comp_ticker in added_tickers:
+                    continue
+                comp_info = item['info']
+                competitors.append({
+                    "ticker": comp_ticker,
+                    "name": item['candidate']['name'],
+                    "market_cap": item['market_cap'],
+                    "industry": comp_info.get('industry', 'Unknown'),
+                    "sector": comp_info.get('sector', 'Unknown'),
+                    "industry_match": False,
+                    "sector_match": False,
+                    "cross_sector": False
+                })
+                added_tickers.add(comp_ticker)
+
+        # Final backfill using no-market-cap candidates if still short
+        if len(competitors) < limit and candidates_no_mc:
+            print(f"    ⚠️ Backfilling with no-market-cap candidates to reach {limit}")
+            for item in candidates_no_mc:
+                if len(competitors) >= limit:
+                    break
+                comp_ticker = item['candidate']['ticker']
+                if comp_ticker in added_tickers:
+                    continue
+                comp_info = item['info']
+                competitors.append({
+                    "ticker": comp_ticker,
+                    "name": item['candidate']['name'],
+                    "market_cap": 0,
+                    "industry": comp_info.get('industry', 'Unknown'),
+                    "sector": comp_info.get('sector', 'Unknown'),
+                    "industry_match": False,
+                    "sector_match": False,
+                    "cross_sector": False
+                })
+                added_tickers.add(comp_ticker)
         
         # Debug output
         tech_found = 0
