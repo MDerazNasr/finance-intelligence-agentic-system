@@ -137,3 +137,131 @@ def get_top_companies(industry: str, n: int = 10) -> Dict[str, Any]:
         time.sleep(0.5 - elapsed)
     
     return result
+
+def _fetch_from_polygon(industry: str, sector: str, n: int) -> Dict[str, Any]:
+    '''
+        Fetch top companies using Polygon.io
+    
+    Algorithm:
+    1. Get list of active US stock tickers from Polygon
+    2. For each ticker, get sector info (might need yfinance for this)
+    3. Filter to matching sector
+    4. Get market caps
+    5. Sort by market cap, return top N
+    
+    Challenge: Polygon doesn't have built-in sector filtering
+    Solution: Hybrid approach - use Polygon for ticker list,
+            yfinance for sector classification
+    '''
+
+    api_key = os.getenv("POLYOGON_API_KEY")
+
+    try:
+        #option A - get SNP 500 list via Poly.
+        print(f"Getting S&P 500 universe...")
+
+        #Verify each via Polygon to ensure they're valid
+        companies = []
+        for ticker in sp500_tickers:
+            try:
+                #Get ticker details from Polygon
+                url = f"https://api.polygon.io/v3/reference/tickers/{ticker}"
+                response = requests.get(url, params={"apiKey": api_key}, timeout=10)
+
+                if response.status_code == 200:
+                    ticker_data = response.json().get('results', {})
+
+                    # Get sector from yfinance (Polygon doesn't have GICS sectors)
+                    ticker_info = _get_cached_ticker_info(ticker)
+                    ticker_sector = ticker_info.get('sector', '')
+
+                    #Filter by sector
+                    if ticker_sector == sector:
+                        companies.append({
+                            'ticker': ticker,
+                            'name': ticker_data.get('name', ticker),
+                            'market_cap': ticker_info.get('marketCap', 0)
+                        })
+                time.sleep(0.1) #Rate limiting
+            except:
+                continue
+
+            #Sort by market cap
+            companies.sort(key=lambda x: x['market_cap'], reverse=True)
+
+            #Return top N
+            return {
+                'success': True,
+                'data': {
+                    'industry_query': industry,
+                    'sector': sector,
+                    'companies': companies[:n],
+                    'total_in_sector': len(companies)
+                },
+                'source': 'Polygon.io + yfinance',
+                'confidence': 0.85
+            }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+def _fetch_from_yfinance(industry: str, sector: str, n: int) -> Dict[str, Any]:
+    """
+    Fallback: Use yfinance for everything
+    
+    Algorithm:
+    1. Get S&P 500 ticker list
+    2. For each ticker, get info from yfinance
+    3. Filter by sector match
+    4. Sort by market cap
+    5. Return top N
+    """
+    
+    try:
+        import yfinance as yf
+        
+        print(f"    📋 Getting S&P 500 companies...")
+        sp500_tickers = _get_sp500_universe()
+        
+        companies = []
+        
+        for ticker in sp500_tickers:
+            try:
+                info = _get_cached_ticker_info(ticker)
+                
+                # Check sector match
+                if info.get('sector') == sector:
+                    market_cap = info.get('marketCap', 0)
+                    if market_cap > 0:
+                        companies.append({
+                            'ticker': ticker,
+                            'name': info.get('longName', ticker),
+                            'market_cap': market_cap
+                        })
+            except:
+                continue
+        
+        # Sort by market cap descending
+        companies.sort(key=lambda x: x['market_cap'], reverse=True)
+        
+        return {
+            'success': True,
+            'data': {
+                'industry_query': industry,
+                'sector': sector,
+                'companies': companies[:n],
+                'total_in_sector': len(companies)
+            },
+            'source': 'yfinance',
+            'confidence': 0.8,
+            'tool_name': 'get_top_companies',
+            'parameters': {'industry': industry, 'n': n},
+            'timestamp': datetime.utcnow().isoformat(),
+            'error': None
+        }
+    
+    except Exception as e:
+        return _create_error_result(industry, n, str(e))
