@@ -775,7 +775,7 @@ def _fetch_from_yfinance(ticker: str, limit: int) -> Dict[str, Any]:
         sector = target_info.get('sector', 'Unknown')
         industry = target_info.get('industry', 'Unknown')
         target_market_cap = target_info.get('marketCap', 0)
-        
+
         print(f"    📋 {company_name}")
         print(f"       Sector: {sector}, Industry: {industry}")
         
@@ -852,7 +852,7 @@ def _fetch_from_yfinance(ticker: str, limit: int) -> Dict[str, Any]:
             "competitors": competitors[:limit],
             "total_found": len(competitors)
         }
-        
+
         result = {
             "tool_name": "find_competitors",
             "parameters": {"ticker": ticker, "limit": limit},

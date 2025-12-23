@@ -116,6 +116,20 @@ def executor_node(state: Dict[str, Any]) -> Dict[str, Any]:
             #this is like a switchboard operator connecting the right line
             result = _route_to_tool(tool_name, parameters, execution_log)
 
+            # Defensive: ensure result is a dict with 'success'
+            if not isinstance(result, dict) or "success" not in result:
+                execution_log.append("Failed: tool returned invalid result")
+                result = {
+                    "tool_name": tool_name,
+                    "parameters": parameters,
+                    "data": None,
+                    "source": "executor",
+                    "timestamp": "",
+                    "confidence": 0.0,
+                    "success": False,
+                    "error": "Tool returned invalid result"
+                }
+
             #log the result
             if result["success"]:
                 execution_log.append(
@@ -261,7 +275,7 @@ def _route_to_tool(
             )
         else:
             result = research_ai_disruption(industry)
-    
+
     # Tool 5: General Research (Fallback) (Phase 2)
     elif tool_name == "general_financial_research":
         # Placeholder until we build this in Phase 2
@@ -291,7 +305,9 @@ def _route_to_tool(
             success=False,
             error=f"Unknown tool: {tool_name}. Available tools: get_quarterly_financials, find_competitors, get_top_companies, research_ai_disruption, general_financial_research"
         )
-    
+
+    # Return result for tools that set 'result' above
+    return result
 #Helper function - Validate Parameters
 def _validate_parameters(tool_name: str, parameters: Dict[str, Any]) -> tuple:
     '''
@@ -327,7 +343,7 @@ Example:
 
     #Check each required param
     for param in required:
-        if param not in parameters[param]:
+        if param not in parameters or parameters.get(param) in (None, ""):
             return False, f"Missing required parameter: {param}"
     
     return True, None

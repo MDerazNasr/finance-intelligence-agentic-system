@@ -61,60 +61,76 @@ def research_ai_disruption(industry: str) -> Dict[str, Any]:
     """
 
     start_time = time.time()
-    
-    print(f"\n🔍 Researching AI disruption in {industry}...")
-    
-    # Step 1: Check cache
-    cache_key = f"ai_disruption_{industry.lower()}"
-    cached = _get_from_cache(cache_key)
-    if cached:
-        print("  💾 Using cached research")
+
+    try:
+        print(f"\n🔍 Researching AI disruption in {industry}...")
+        
+        # Step 1: Check cache
+        cache_key = f"ai_disruption_{industry.lower()}"
+        cached = _get_from_cache(cache_key)
+        if cached:
+            # Validate cached structure to avoid NoneType errors
+            if isinstance(cached, dict) and cached.get("data") is not None:
+                print("  💾 Using cached research")
+                elapsed = time.time() - start_time
+                if elapsed < 0.5:
+                    time.sleep(0.5 - elapsed)
+                return cached
+            else:
+                print("  ⚠️ Cached research invalid, re-fetching...")
+        
+        # Step 2: Search the web
+        print("  🌐 Searching the web...")
+        search_results = _search_web(industry)
+        
+        if not search_results:
+            return _create_error_result(
+                industry,
+                "Web search failed - check Tavily API key or network connection"
+            )
+        
+        # Step 3: Synthesize with LLM
+        print("  🤖 Synthesizing findings with LLM...")
+        analysis = _synthesize_with_llm(industry, search_results)
+        
+        if not analysis:
+            return _create_error_result(
+                industry,
+                "LLM synthesis failed - check Gemini API key"
+            )
+
+        # Ensure required fields exist to avoid NoneType errors downstream
+        analysis.setdefault("summary", "")
+        analysis.setdefault("use_cases", [])
+        analysis.setdefault("examples", [])
+        analysis.setdefault("sources", [])
+        analysis["industry"] = industry
+        
+        # Step 4: Structure result
+        result = {
+            'tool_name': 'research_ai_disruption',
+            'parameters': {'industry': industry},
+            'data': analysis,
+            'source': f"Web research + LLM synthesis ({len(search_results)} sources)",
+            'timestamp': datetime.utcnow().isoformat(),
+            'confidence': 0.7,  # Lower than direct data (this is research/synthesis)
+            'success': True,
+            'error': None
+        }
+        
+        # Cache it
+        _save_to_cache(cache_key, result)
+        
+        # Ensure minimum delay
         elapsed = time.time() - start_time
         if elapsed < 0.5:
             time.sleep(0.5 - elapsed)
-        return cached
-    
-    # Step 2: Search the web
-    print("  🌐 Searching the web...")
-    search_results = _search_web(industry)
-    
-    if not search_results:
-        return _create_error_result(
-            industry,
-            "Web search failed - check Tavily API key or network connection"
-        )
-    
-    # Step 3: Synthesize with LLM
-    print("  🤖 Synthesizing findings with LLM...")
-    analysis = _synthesize_with_llm(industry, search_results)
-    
-    if not analysis:
-        return _create_error_result(
-            industry,
-            "LLM synthesis failed - check Gemini API key"
-        )
-    
-    # Step 4: Structure result
-    result = {
-        'tool_name': 'research_ai_disruption',
-        'parameters': {'industry': industry},
-        'data': analysis,
-        'source': f"Web research + LLM synthesis ({len(search_results)} sources)",
-        'timestamp': datetime.utcnow().isoformat(),
-        'confidence': 0.7,  # Lower than direct data (this is research/synthesis)
-        'success': True,
-        'error': None
-    }
-    
-    # Cache it
-    _save_to_cache(cache_key, result)
-    
-    # Ensure minimum delay
-    elapsed = time.time() - start_time
-    if elapsed < 0.5:
-        time.sleep(0.5 - elapsed)
-    
-    return result
+        
+        return result
+    except Exception as e:
+        # Catch-all to avoid NoneType errors in the agent pipeline
+        print(f"  ❌ Unexpected error: {e}")
+        return _create_error_result(industry, f"Unexpected error: {e}")
 
 def _search_web(industry: str) -> List[Dict[str, Any]]:
     """
@@ -297,7 +313,10 @@ def _get_from_cache(cache_key: str) -> Optional[Dict]:
             age = datetime.now() - cache_time
             
             if age < timedelta(hours=CACHE_DURATION_HOURS):
-                return cached['result']
+                result = cached.get('result')
+                # Ensure result has the expected keys
+                if result and isinstance(result, dict) and result.get("success") is not None:
+                    return result
         except:
             pass
     

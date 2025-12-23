@@ -254,40 +254,50 @@ def _format_successful_result(result: Dict[str, Any]) -> str:
             output.append(f"{company.get('rank', '?')}. **{company['ticker']}**: {company['name']} (${cap_b:.1f}B)")
     
     elif tool_name == "research_ai_disruption" and data:
-        output.append(f"**Industry:** {result['parameters']['industry']}")
+        output.append(f"**Industry:** {result['parameters']['industry'].title()}")
         
         # Summary
         summary = data.get('summary', '')
         if summary:
-            output.append(f"\n**Overview:**")
+            output.append(f"\n**AI Disruption Overview:**")
             output.append(summary)
         
         # Use cases
         use_cases = data.get('use_cases', [])
         if use_cases:
-            output.append(f"\n**AI Use Cases ({len(use_cases)}):**")
+            output.append(f"\n**Key Use Cases:**")
             for i, uc in enumerate(use_cases, 1):
                 output.append(f"{i}. {uc}")
         
         # Examples
         examples = data.get('examples', [])
         if examples:
-            output.append(f"\n**Real-World Examples:**")
-            for ex in examples[:5]:  # Limit to 5
+            output.append(f"\n**Real-World Implementations:**")
+            for ex in examples[:5]:
                 company = ex.get('company', 'Unknown')
                 application = ex.get('application', '')
                 output.append(f"- **{company}**: {application}")
         
-        # Sources
+        # Sources - collapsible
         sources = data.get('sources', [])
         if sources:
-            output.append(f"\n**Sources ({len(sources)}):**")
-            for src in sources[:3]:  # Show top 3
+            output.append(f"\n<details>")
+            output.append(f"<summary><b>📚 View Sources ({len(sources)} articles)</b></summary>")
+            output.append(f"\n")
+            for i, src in enumerate(sources, 1):
                 title = src.get('title', 'Unknown')
                 url = src.get('url', '')
-                output.append(f"- [{title}]({url})")
+                # Show score if available (Tavily relevance)
+                score = src.get('score', 0)
+                if score > 0:
+                    output.append(f"{i}. [{title}]({url}) (relevance: {score:.0%})")
+                else:
+                    output.append(f"{i}. [{title}]({url})")
+            output.append(f"</details>")
         
-        output.append(f"\n**Confidence:** {result['confidence']:.0%} (Research/Synthesis)")
+        # Confidence with explanation
+        output.append(f"\n**Confidence:** {result['confidence']:.0%}")
+        output.append(f"<sub>Lower confidence reflects research/synthesis nature vs. direct data sources</sub>")
     
     elif tool_name == "general_financial_research" and data:
         # Format general research (Phase 2)
