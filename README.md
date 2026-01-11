@@ -1,6 +1,6 @@
-# Sagard Analyst Sentinel 🎯
+# Finance Intelligence agentic system 🎯
 
-A reliability-first agentic system for financial intelligence. Built for the Sagard AI Enablement internship interview.
+An agentic system for financial intelligence.
 
 ## ⚡ Quick Start (Phase 1)
 
