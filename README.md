@@ -1,4 +1,4 @@
-# Sagard Analyst Sentinel
+# Finance Analyst Agentic System
 
 **AI-Powered Financial Intelligence Agent | Multi-Source Data Integration | Production-Ready Architecture**
 
